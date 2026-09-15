@@ -14,34 +14,36 @@ jobs:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
-      - name: Diagnostico - confirmar checkout
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Instalar Dependências do Node
+        run: npm install
+
+      - name: Gerar pasta iOS (Expo Prebuild)
+        run: npx expo prebuild --platform ios
+
+      - name: Instalar dependências nativas (CocoaPods)
         run: |
-          echo "=== workspace: $GITHUB_WORKSPACE ==="
-          echo "=== branch/ref: $GITHUB_REF ==="
-          ls -la "$GITHUB_WORKSPACE"
-          echo "=== procurando ios/ ==="
-          find "$GITHUB_WORKSPACE" -maxdepth 2 -iname "ios" -type d || true
-          if [ ! -d "$GITHUB_WORKSPACE/ios/FinancasApp" ]; then
-            echo "ERRO: $GITHUB_WORKSPACE/ios/FinancasApp nao existe apos o checkout."
-            echo "Isso significa que a pasta ios/FinancasApp NAO esta commitada na branch/ref que disparou este workflow."
+          cd ios
+          pod install
+
+      - name: Diagnostico - confirmar geração do iOS
+        run: |
+          echo "=== procurando ios/projeto_financas ==="
+          if [ ! -d "$GITHUB_WORKSPACE/ios/projeto_financas" ]; then
+            echo "ERRO: A pasta ios/projeto_financas nao existe apos o prebuild."
             exit 1
           fi
-          echo "OK: ios/FinancasApp encontrado."
-
-      - name: Instalar XcodeGen
-        run: brew install xcodegen
-
-      - name: Gerar o .xcodeproj a partir do project.yml
-        run: |
-          set -e
-          cd "$GITHUB_WORKSPACE/ios/FinancasApp"
-          xcodegen generate
+          echo "OK: ios/projeto_financas encontrado."
 
       - name: Build (sem assinatura)
         run: |
           set -e
-          cd "$GITHUB_WORKSPACE/ios/FinancasApp"
-          xcodebuild -project FinancasApp.xcodeproj -scheme FinancasApp \
+          cd "$GITHUB_WORKSPACE/ios"
+          xcodebuild -workspace projeto_financas.xcworkspace -scheme projeto_financas \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build \
@@ -55,13 +57,13 @@ jobs:
       - name: Empacotar em .ipa
         run: |
           set -e
-          cd "$GITHUB_WORKSPACE/ios/FinancasApp"
+          cd "$GITHUB_WORKSPACE/ios"
           mkdir -p Payload
-          cp -r build/Build/Products/Release-iphoneos/FinancasApp.app Payload/
-          zip -r FinancasApp.ipa Payload
+          cp -r build/Build/Products/Release-iphoneos/projeto_financas.app Payload/
+          zip -r projeto_financas.ipa Payload
 
       - name: Subir .ipa como artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FinancasApp-ipa
-          path: ios/FinancasApp/FinancasApp.ipa
+          name: projeto_financas-ipa
+          path: ios/projeto_financas.ipa
