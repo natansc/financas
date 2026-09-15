@@ -21,7 +21,7 @@ jobs:
           cache: 'npm'
 
       - name: Instalar Dependências
-        run: npm ci
+        run: npm install
 
       - name: Gerar pasta nativa iOS
         run: npx expo prebuild --platform ios
