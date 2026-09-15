@@ -1,0 +1,16 @@
+name: FinancasApp
+options:
+  bundleIdPrefix: com.financas
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  FinancasApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - FinancasApp
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+      PRODUCT_BUNDLE_IDENTIFIER: com.financas.FinancasApp
+      INFOPLIST_KEY_UILaunchScreen_Generation: YES
