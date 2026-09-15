@@ -1,0 +1,32 @@
+name: Gerar IPA (iOS)
+
+on:
+  workflow_dispatch: # Permite execução manual via painel do GitHub
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node/Ruby (Se usar React Native/CocoaPods)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      # Exemplo de instalação de dependências (descomente se aplicável)
+      # - name: Instalar Pods
+      #   run: cd ios/FinancasApp && pod install
+
+      - name: Build e Archive
+        run: |
+          cd ios/FinancasApp
+          xcodebuild clean archive \
+            -project FinancasApp.xcodeproj \
+            -scheme FinancasApp \
+            -archivePath ../../build/FinancasApp.xcarchive \
+            CODE_SIGNING_ALLOWED=NO # Remova/Altere para YES ao configurar certificados reais
+
+      # O passo de exportação do .ipa exigiria um exportOptions.plist e certificados válidos.
+      # Sem eles, o build parará no .xcarchive.
