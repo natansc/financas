@@ -14,11 +14,26 @@ jobs:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Instalar Dependências
+        run: npm ci
+
       - name: Gerar pasta nativa iOS
-  
+        run: npx expo prebuild --platform ios
+
+      - name: Compilar Projeto iOS
         run: |
-          npx expo prebuild --platform ios
-          xcodebuild -project FinancasApp.xcodeproj -scheme FinancasApp \
+          cd ios
+          PROJ_NAME=$(ls -d *.xcodeproj | head -n 1)
+          SCHEME_NAME=$(basename "$PROJ_NAME" .xcodeproj)
+
+          xcodebuild -project "$PROJ_NAME" \
+            -scheme "$SCHEME_NAME" \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build \
@@ -28,6 +43,3 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             build
-
-
-            
