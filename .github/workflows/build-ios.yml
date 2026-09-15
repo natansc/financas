@@ -24,7 +24,7 @@ jobs:
           cd ios/FinancasApp
           xcodegen generate
 
-      - name: Compilar App para iOS
+      - name: Compilar App para iOS e Capturar Erros
         run: |
           cd ios/FinancasApp
           xcodebuild -project FinancasApp.xcodeproj \
@@ -37,7 +37,14 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
-            build
+            build | tee xcodebuild.log || true
+
+          if grep -E "error:" xcodebuild.log; then
+            echo "================ ERRO DE COMPILAÇÃO SWIFT ================"
+            grep -E "error:" xcodebuild.log
+            echo "=========================================================="
+            exit 1
+          fi
 
       - name: Empacotar em arquivo IPA
         run: |
