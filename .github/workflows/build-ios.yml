@@ -14,22 +14,33 @@ jobs:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
-      - name: Diagnóstico - listar workspace
+      - name: Diagnostico - confirmar checkout
         run: |
-          echo "GITHUB_WORKSPACE = $GITHUB_WORKSPACE"
-          pwd
-          find "$GITHUB_WORKSPACE/ios" -maxdepth 4 2>&1 || echo "PASTA ios/ NAO ENCONTRADA NO CHECKOUT"
+          echo "=== workspace: $GITHUB_WORKSPACE ==="
+          echo "=== branch/ref: $GITHUB_REF ==="
+          ls -la "$GITHUB_WORKSPACE"
+          echo "=== procurando ios/ ==="
+          find "$GITHUB_WORKSPACE" -maxdepth 2 -iname "ios" -type d || true
+          if [ ! -d "$GITHUB_WORKSPACE/ios/FinancasApp" ]; then
+            echo "ERRO: $GITHUB_WORKSPACE/ios/FinancasApp nao existe apos o checkout."
+            echo "Isso significa que a pasta ios/FinancasApp NAO esta commitada na branch/ref que disparou este workflow."
+            exit 1
+          fi
+          echo "OK: ios/FinancasApp encontrado."
 
       - name: Instalar XcodeGen
         run: brew install xcodegen
 
       - name: Gerar o .xcodeproj a partir do project.yml
-        working-directory: ios/FinancasApp
-        run: xcodegen generate
+        run: |
+          set -e
+          cd "$GITHUB_WORKSPACE/ios/FinancasApp"
+          xcodegen generate
 
       - name: Build (sem assinatura)
-        working-directory: ios/FinancasApp
         run: |
+          set -e
+          cd "$GITHUB_WORKSPACE/ios/FinancasApp"
           xcodebuild -project FinancasApp.xcodeproj -scheme FinancasApp \
             -sdk iphoneos \
             -configuration Release \
@@ -42,8 +53,9 @@ jobs:
             build
 
       - name: Empacotar em .ipa
-        working-directory: ios/FinancasApp
         run: |
+          set -e
+          cd "$GITHUB_WORKSPACE/ios/FinancasApp"
           mkdir -p Payload
           cp -r build/Build/Products/Release-iphoneos/FinancasApp.app Payload/
           zip -r FinancasApp.ipa Payload
