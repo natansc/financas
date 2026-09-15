@@ -14,10 +14,10 @@ jobs:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
-      - name: Procurar arquivo Xcode
+      - name: Gerar pasta nativa iOS
   
         run: |
-          find . -maxdepth 3 -name "*.xcodeproj"
+          npx expo prebuild --platform ios
           xcodebuild -project FinancasApp.xcodeproj -scheme FinancasApp \
             -sdk iphoneos \
             -configuration Release \
