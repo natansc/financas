@@ -14,26 +14,17 @@ jobs:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
 
-      - name: Instalar Dependências
-        run: npm install
+      - name: Gerar o .xcodeproj a partir do project.yml
+        working-directory: ios/FinancasApp
+        run: xcodegen generate
 
-      - name: Gerar pasta nativa iOS
-        run: npx expo prebuild --platform ios
-
-      - name: Compilar Projeto iOS
+      - name: Build (sem assinatura)
+        working-directory: ios/FinancasApp
         run: |
-          cd ios
-          PROJ_NAME=$(ls -d *.xcodeproj | head -n 1)
-          SCHEME_NAME=$(basename "$PROJ_NAME" .xcodeproj)
-
-          xcodebuild -project "$PROJ_NAME" \
-            -scheme "$SCHEME_NAME" \
+          xcodebuild -project FinancasApp.xcodeproj -scheme FinancasApp \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build \
@@ -43,3 +34,16 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             build
+
+      - name: Empacotar em .ipa
+        working-directory: ios/FinancasApp
+        run: |
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/FinancasApp.app Payload/
+          zip -r FinancasApp.ipa Payload
+
+      - name: Subir .ipa como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinancasApp-ipa
+          path: ios/FinancasApp/FinancasApp.ipa
