@@ -14,6 +14,12 @@ jobs:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
+      - name: Diagnóstico - listar workspace
+        run: |
+          echo "GITHUB_WORKSPACE = $GITHUB_WORKSPACE"
+          pwd
+          find "$GITHUB_WORKSPACE/ios" -maxdepth 4 2>&1 || echo "PASTA ios/ NAO ENCONTRADA NO CHECKOUT"
+
       - name: Instalar XcodeGen
         run: brew install xcodegen
 
