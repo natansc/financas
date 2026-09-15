@@ -9,7 +9,7 @@ targets:
     platform: iOS
     deploymentTarget: "16.0"
     sources:
-      - FinancasApp
+      - path: FinancasApp
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.financas.FinancasApp
@@ -17,6 +17,7 @@ targets:
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
+        AD_HOC_CODE_SIGNING_ALLOWED: YES
         SWIFT_VERSION: "5.0"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_GeneratesUniqueUsageKey: YES
