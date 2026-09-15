@@ -1,34 +1,23 @@
-name: Build iOS IPA
+name: iOS Build Test
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
 
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout do Repositório
+      - name: Checkout do Código
         uses: actions/checkout@v4
 
-      - name: Selecionar Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
-      - name: Instalar XcodeGen
-        run: brew install xcodegen
-
-      - name: Gerar Projeto Xcode (.xcodeproj)
+      - name: Compilar Projeto no xcodebuild
         run: |
-          cd ios/FinancasApp
-          xcodegen generate
-
-      - name: Compilar App para iOS e Capturar Erros
-        run: |
-          cd ios/FinancasApp
-          xcodebuild -project FinancasApp.xcodeproj \
-            -scheme FinancasApp \
+          xcodebuild clean -project FinancasApp.xcodeproj -scheme FinancasApp
+          xcodebuild -project FinancasApp.xcodeproj -scheme FinancasApp \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build \
@@ -37,24 +26,4 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
-            build | tee xcodebuild.log || true
-
-          if grep -E "error:" xcodebuild.log; then
-            echo "================ ERRO DE COMPILAÇÃO SWIFT ================"
-            grep -E "error:" xcodebuild.log
-            echo "=========================================================="
-            exit 1
-          fi
-
-      - name: Empacotar em arquivo IPA
-        run: |
-          mkdir -p Payload
-          cp -r ios/FinancasApp/build/Build/Products/Release-iphoneos/*.app Payload/
-          zip -r FinancasApp.ipa Payload
-          rm -rf Payload
-
-      - name: Disponibilizar IPA para Download
-        uses: actions/upload-artifact@v4
-        with:
-          name: FinancasApp-IPA
-          path: FinancasApp.ipa
+            build
