@@ -1,4 +1,4 @@
-name: Build iOS App
+name: Build iOS IPA
 
 on:
   push:
@@ -6,42 +6,46 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-ios:
+  build:
     runs-on: macos-latest
 
     steps:
       - name: Checkout do Repositório
         uses: actions/checkout@v4
 
+      - name: Selecionar Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
       - name: Instalar XcodeGen
         run: brew install xcodegen
 
-      - name: Gerar Projeto Xcode Automático
+      - name: Gerar Projeto Xcode (.xcodeproj)
         run: |
           cd ios/FinancasApp
           xcodegen generate
 
-      - name: Compilar Projeto e Gerar Archive
+      - name: Compilar App para iOS
         run: |
           cd ios/FinancasApp
-          xcodebuild clean archive \
-            -project FinancasApp.xcodeproj \
+          xcodebuild -project FinancasApp.xcodeproj \
             -scheme FinancasApp \
-            -destination "generic/platform=iOS" \
-            -archivePath ../../build/FinancasApp.xcarchive \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+            CODE_SIGN_IDENTITY="" \
+            build
 
-      - name: Converter XCArchive em IPA
+      - name: Empacotar em arquivo IPA
         run: |
           mkdir -p Payload
-          cp -r build/FinancasApp.xcarchive/Products/Applications/*.app Payload/
+          cp -r ios/FinancasApp/build/Build/Products/Release-iphoneos/*.app Payload/
           zip -r FinancasApp.ipa Payload
           rm -rf Payload
 
-      - name: Disponibilizar o IPA para Download
+      - name: Disponibilizar IPA para Download
         uses: actions/upload-artifact@v4
         with:
-          name: FinancasApp-Unsigned-IPA
+          name: FinancasApp-IPA
           path: FinancasApp.ipa
