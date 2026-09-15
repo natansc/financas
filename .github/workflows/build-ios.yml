@@ -27,12 +27,13 @@ jobs:
           xcodebuild clean archive \
             -project FinancasApp.xcodeproj \
             -scheme FinancasApp \
+            -destination "generic/platform=iOS" \
             -archivePath ../../build/FinancasApp.xcarchive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
-      - name: Converter em IPA
+      - name: Converter XCArchive em IPA
         run: |
           mkdir -p Payload
           cp -r build/FinancasApp.xcarchive/Products/Applications/*.app Payload/
