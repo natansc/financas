@@ -1,0 +1,70 @@
+[33mcommit c7cae128489e6d9c27e7b7f66135c81165cd48cf[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: Natan de Souza Costa <natan.costa@trinusco.com.br>
+Date:   Tue Sep 15 16:27:20 2026 -0300
+
+    Fix: Recriado package-lock com versoes estaveis do Expo
+
+ .github/workflows/build-ios.yml | 28 [32m++++++++++++++++++++[m[31m--------[m
+ 1 file changed, 20 insertions(+), 8 deletions(-)
+
+[33mcommit fbb8a67d90406f99dafbf96acfcca23243169c36[m
+Author: Natan de Souza Costa <natan.costa@trinusco.com.br>
+Date:   Tue Sep 15 16:25:15 2026 -0300
+
+    Fix: Recriado package-lock com versoes estaveis do Expo
+
+ .github/workflows/build-ios.yml | 8 [32m+++++++[m[31m-[m
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+[33mcommit 8d0b0cf61c85bf8baa21a7c3c744a859bbd6189f[m
+Author: Natan de Souza Costa <natan.costa@trinusco.com.br>
+Date:   Tue Sep 15 16:21:24 2026 -0300
+
+    Fix: Recriado package-lock com versoes estaveis do Expo
+
+ .github/workflows/build-ios.yml                    |  40 [32m++++[m[31m----[m
+ app.json                                           |  29 [32m++++++[m
+ ios/FinancasApp/FinancasApp.swift                  |  12 [31m---[m
+ .../FinancasApp/Models/TransactionModel.swift      |  35 [31m-------[m
+ .../FinancasApp/Services/APIService.swift          |  39 [31m--------[m
+ .../Views/AddManualTransactionView.swift           |  62 [31m------------[m
+ .../FinancasApp/Views/DashboardView.swift          | 101 [31m-------------------[m
+ ios/FinancasApp/project.yml                        |  23 [31m-----[m
+ package-lock.json                                  | 108 [32m+++[m[31m------------------[m
+ package.json                                       |  48 [32m++++[m[31m-----[m
+ 10 files changed, 83 insertions(+), 414 deletions(-)
+[33mcommit c7cae128489e6d9c27e7b7f66135c81165cd48cf[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: Natan de Souza Costa <natan.costa@trinusco.com.br>
+Date:   Tue Sep 15 16:27:20 2026 -0300
+
+    Fix: Recriado package-lock com versoes estaveis do Expo
+
+ .github/workflows/build-ios.yml | 28 [32m++++++++++++++++++++[m[31m--------[m
+ 1 file changed, 20 insertions(+), 8 deletions(-)
+
+[33mcommit fbb8a67d90406f99dafbf96acfcca23243169c36[m
+Author: Natan de Souza Costa <natan.costa@trinusco.com.br>
+Date:   Tue Sep 15 16:25:15 2026 -0300
+
+    Fix: Recriado package-lock com versoes estaveis do Expo
+
+ .github/workflows/build-ios.yml | 8 [32m+++++++[m[31m-[m
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+[33mcommit 8d0b0cf61c85bf8baa21a7c3c744a859bbd6189f[m
+Author: Natan de Souza Costa <natan.costa@trinusco.com.br>
+Date:   Tue Sep 15 16:21:24 2026 -0300
+
+    Fix: Recriado package-lock com versoes estaveis do Expo
+
+ .github/workflows/build-ios.yml                    |  40 [32m++++[m[31m----[m
+ app.json                                           |  29 [32m++++++[m
+ ios/FinancasApp/FinancasApp.swift                  |  12 [31m---[m
+ .../FinancasApp/Models/TransactionModel.swift      |  35 [31m-------[m
+ .../FinancasApp/Services/APIService.swift          |  39 [31m--------[m
+ .../Views/AddManualTransactionView.swift           |  62 [31m------------[m
+ .../FinancasApp/Views/DashboardView.swift          | 101 [31m-------------------[m
+ ios/FinancasApp/project.yml                        |  23 [31m-----[m
+ package-lock.json                                  | 108 [32m+++[m[31m------------------[m
+ package.json                                       |  48 [32m++++[m[31m-----[m
+ 10 files changed, 83 insertions(+), 414 deletions(-)
