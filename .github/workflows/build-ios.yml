@@ -1,32 +1,40 @@
-name: Gerar IPA (iOS)
+name: Build iOS App
 
 on:
-  workflow_dispatch: # Permite execução manual via painel do GitHub
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-ios:
     runs-on: macos-latest
+
     steps:
-      - name: Checkout do código
+      - name: Checkout do Repositório
         uses: actions/checkout@v4
 
-      - name: Configurar Node/Ruby (Se usar React Native/CocoaPods)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          
-      # Exemplo de instalação de dependências (descomente se aplicável)
-      # - name: Instalar Pods
-      #   run: cd ios/FinancasApp && pod install
+      - name: Selecionar Versão do Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
-      - name: Build e Archive
+      - name: Compilar Projeto e Gerar XCArchive
         run: |
           cd ios/FinancasApp
           xcodebuild clean archive \
             -project FinancasApp.xcodeproj \
             -scheme FinancasApp \
             -archivePath ../../build/FinancasApp.xcarchive \
-            CODE_SIGNING_ALLOWED=NO # Remova/Altere para YES ao configurar certificados reais
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
 
-      # O passo de exportação do .ipa exigiria um exportOptions.plist e certificados válidos.
-      # Sem eles, o build parará no .xcarchive.
+      - name: Converter XCArchive em IPA (Não Assinado)
+        run: |
+          mkdir -p Payload
+          cp -r build/FinancasApp.xcarchive/Products/Applications/FinancasApp.app Payload/
+          zip -r FinancasApp.ipa Payload
+          rm -rf Payload
+
+      - name: Disponibilizar o IPA para Download
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinancasApp-Unsigned-IPA
+          path: FinancasApp.ipa
