@@ -14,9 +14,11 @@ jobs:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
-      - name: Compilar Projeto no xcodebuild
+      - name: Diagnóstico de Schemes
+  
         run: |
-          xcodebuild clean -project FinancasApp.xcodeproj -scheme FinancasApp
+          
+          xcodebuild -list -project FinancasApp.xcodeproj
           xcodebuild -project FinancasApp.xcodeproj -scheme FinancasApp \
             -sdk iphoneos \
             -configuration Release \
@@ -27,3 +29,6 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             build
+
+
+            
