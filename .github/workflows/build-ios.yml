@@ -14,9 +14,10 @@ jobs:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
-      - name: Diagnóstico de Schemes
+      - name: Listar estrutura de pastas
   
         run: |
+          run: find . -maxdepth 3 -name "*.xcodeproj"
           xcodebuild clean -project FinancasApp.xcodeproj -scheme FinancasApp
           xcodebuild -project FinancasApp.xcodeproj -scheme FinancasApp \
             -sdk iphoneos \
