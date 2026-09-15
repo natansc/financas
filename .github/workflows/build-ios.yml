@@ -17,8 +17,7 @@ jobs:
       - name: Diagnóstico de Schemes
   
         run: |
-          
-          xcodebuild -list -project FinancasApp.xcodeproj
+          xcodebuild clean -project FinancasApp.xcodeproj -scheme FinancasApp
           xcodebuild -project FinancasApp.xcodeproj -scheme FinancasApp \
             -sdk iphoneos \
             -configuration Release \
