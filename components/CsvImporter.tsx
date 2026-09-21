@@ -1,7 +1,19 @@
 'use client'
 import { useState } from 'react'
-import Papa from 'papaparse'
+import Papa, { ParseResult } from 'papaparse'
 import { api } from '@/lib/api'
+
+type CsvRow = {
+  'Data de Compra': string
+  'Nome no Cartão': string
+  'Final do Cartão': string
+  'Categoria': string
+  'Descrição': string
+  'Parcela': string
+  'Valor (em US$)': string
+  'Cotação (em R$)': string
+  'Valor (em R$)': string
+}
 
 export default function CsvImporter() {
   const [loading, setLoading] = useState(false)
@@ -24,37 +36,40 @@ export default function CsvImporter() {
     setResult(null)
     setError(null)
 
-    Papa.parse(file, {
+    Papa.parse<CsvRow>(file, {
       header: true,
       delimiter: ';',
       skipEmptyLines: true,
-      complete: async (results) => {
+      complete: async (results: ParseResult<CsvRow>) => {
         try {
           const rows = results.data
-            .map((r: any) => ({
+            .map((r) => ({
               purchase_date: parseDate(r['Data de Compra']),
               card_name: r['Nome no Cartão']?.trim() || 'Manual',
               card_last_four: r['Final do Cartão']?.trim() || '0000',
-              category: r['Categoria'] && r['Categoria'] !== '-' ? r['Categoria'].trim() : null,
+              category:
+                r['Categoria'] && r['Categoria'] !== '-'
+                  ? r['Categoria'].trim()
+                  : null,
               description: r['Descrição']?.trim() || '',
               installment: r['Parcela']?.trim() || 'Única',
               amount_usd: parseMoney(r['Valor (em US$)']),
               exchange_rate: parseMoney(r['Cotação (em R$)']),
               amount_brl: parseMoney(r['Valor (em R$)']),
-              source: 'csv',
+              source: 'csv' as const,
             }))
-            .filter(r => r.description && r.purchase_date)
+            .filter((r) => r.description && r.purchase_date)
 
           const res = await api.post('/api/import', rows)
           if (res.error) throw new Error(res.error)
           setResult({ inserted: res.inserted, duplicates: res.duplicates })
-        } catch (err: any) {
-          setError(err.message)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Erro desconhecido')
         } finally {
           setLoading(false)
         }
       },
-      error: (err) => {
+      error: (err: Error) => {
         setError(err.message)
         setLoading(false)
       },

@@ -33,7 +33,7 @@ export default function CategoryChart({ transactions }: { transactions: any[] })
               tick={{ fontSize: 11 }}
               tickFormatter={(v: string) => (v.length > 16 ? v.slice(0, 15) + '…' : v)}
             />
-            <Tooltip formatter={(v: number) => `R$ ${v.toFixed(2)}`} />
+            <Tooltip formatter={(value) => `R$ ${Number(value).toFixed(2)}`} />
             <Bar dataKey="value" radius={[0, 4, 4, 0]}>
               {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
             </Bar>
