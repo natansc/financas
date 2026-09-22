@@ -1,14 +1,13 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Upload, List, Plus, Wallet } from 'lucide-react'
+import { Home, Upload, List, Wallet } from 'lucide-react'
 
 const items = [
   { href: '/', label: 'Início', icon: Home },
   { href: '/transactions', label: 'Lançamentos', icon: List },
   { href: '/import', label: 'Importar', icon: Upload },
   { href: '/accounts', label: 'Contas', icon: Wallet },
-  { href: '/manual', label: 'Novo', icon: Plus },
 ]
 
 export default function BottomNav() {
@@ -20,10 +19,10 @@ export default function BottomNav() {
           const active = pathname === href
           return (
             <Link key={href} href={href}
-              className={`flex flex-col items-center py-2 px-2 text-[10px] ${
+              className={`flex flex-col items-center py-2 px-4 text-[11px] ${
                 active ? 'text-blue-600' : 'text-gray-500'
               }`}>
-              <Icon size={20} />
+              <Icon size={22} />
               <span className="mt-0.5">{label}</span>
             </Link>
           )

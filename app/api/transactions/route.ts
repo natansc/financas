@@ -52,3 +52,19 @@ export async function DELETE(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
+
+export async function PATCH(req: Request) {
+  if (!checkToken(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const supabase = getSupabaseAdmin()
+  const body = await req.json()
+  const { id, ...updates } = body
+  if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 })
+  const { data, error } = await supabase
+    .from('transactions')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
