@@ -5,7 +5,8 @@ export default function ImportPage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Importar fatura</h1>
       <p className="text-sm text-gray-600">
-        Selecione o CSV exportado pelo banco. Duplicatas são ignoradas automaticamente.
+        Selecione a conta, o mês da fatura e o CSV exportado pelo banco.
+        Duplicatas são ignoradas automaticamente.
       </p>
       <CsvImporter />
     </div>
