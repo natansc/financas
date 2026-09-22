@@ -4,6 +4,15 @@ import { api } from '@/lib/api'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']
 
+const TYPES = [
+  { value: 'credit_card', label: 'Cartão de crédito' },
+  { value: 'checking',    label: 'Conta corrente' },
+  { value: 'savings',     label: 'Poupança' },
+  { value: 'cash',        label: 'Dinheiro' },
+  { value: 'pix',         label: 'Pix' },
+  { value: 'other',       label: 'Outro' },
+]
+
 const emptyForm = {
   id: '',
   name: '',
@@ -25,31 +34,30 @@ export default function AccountsPage() {
   useEffect(() => { load() }, [])
 
   const isEdit = !!form.id
+  const isCard = form.type === 'credit_card'
 
-  const startAdd = () => {
-    setForm(emptyForm)
-    setOpen(true)
-  }
-
-  const startEdit = (a: any) => {
-    setForm({ ...emptyForm, ...a })
-    setOpen(true)
-  }
-
-  const closeForm = () => {
-    setForm(emptyForm)
-    setOpen(false)
-  }
+  const startAdd = () => { setForm(emptyForm); setOpen(true) }
+  const startEdit = (a: any) => { setForm({ ...emptyForm, ...a }); setOpen(true) }
+  const closeForm = () => { setForm(emptyForm); setOpen(false) }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    if (isEdit) {
-      await api.patch('/api/accounts', form)
-    } else {
-      const { id, ...create } = form
-      await api.post('/api/accounts', create)
+
+    const payload: any = {
+      name: form.name,
+      type: form.type,
+      color: form.color,
+      holder: isCard ? (form.holder || null) : null,
+      last_four: isCard ? (form.last_four || null) : null,
     }
+
+    if (isEdit) {
+      await api.patch('/api/accounts', { ...payload, id: form.id })
+    } else {
+      await api.post('/api/accounts', payload)
+    }
+
     setSaving(false)
     closeForm()
     load()
@@ -82,48 +90,71 @@ export default function AccountsPage() {
             <button type="button" onClick={closeForm} className="text-sm text-gray-500">fechar</button>
           </div>
 
-          <input
-            placeholder="Nome (ex: Cartão Ketty 2094)"
-            value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })}
-            required
-            className="w-full border rounded-lg px-3 py-2 text-base"
-          />
-          <select
-            value={form.type}
-            onChange={e => setForm({ ...form, type: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-base bg-white"
-          >
-            <option value="credit_card">Cartão de crédito</option>
-            <option value="checking">Conta corrente</option>
-            <option value="savings">Poupança</option>
-            <option value="cash">Dinheiro</option>
-          </select>
-          <input
-            placeholder="Titular (ex: KETTY LORRANE)"
-            value={form.holder}
-            onChange={e => setForm({ ...form, holder: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-base"
-          />
-          <input
-            placeholder="Final do cartão (ex: 2094)"
-            value={form.last_four}
-            onChange={e => setForm({ ...form, last_four: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-base"
-          />
-          <div className="flex gap-2">
-            {COLORS.map(c => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setForm({ ...form, color: c })}
-                className={`w-8 h-8 rounded-full border-2 ${
-                  form.color === c ? 'border-gray-900' : 'border-transparent'
-                }`}
-                style={{ background: c }}
-              />
-            ))}
+          <label className="block">
+            <span className="text-xs font-medium text-gray-600">Nome</span>
+            <input
+              placeholder="Ex: Cartão Itaú Black, Pix, Dinheiro"
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              required
+              className="w-full border rounded-lg px-3 py-2 text-base"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium text-gray-600">Tipo</span>
+            <select
+              value={form.type}
+              onChange={e => setForm({ ...form, type: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-base bg-white"
+            >
+              {TYPES.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Só aparece pra cartão de crédito */}
+          {isCard && (
+            <>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600">Titular (opcional)</span>
+                <input
+                  placeholder="Ex: KETTY LORRANE"
+                  value={form.holder}
+                  onChange={e => setForm({ ...form, holder: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 text-base"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600">Final do cartão (opcional)</span>
+                <input
+                  placeholder="Ex: 2094"
+                  value={form.last_four}
+                  onChange={e => setForm({ ...form, last_four: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 text-base"
+                />
+              </label>
+            </>
+          )}
+
+          <div>
+            <span className="block text-xs font-medium text-gray-600 mb-1">Cor</span>
+            <div className="flex gap-2">
+              {COLORS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setForm({ ...form, color: c })}
+                  className={`w-8 h-8 rounded-full border-2 ${
+                    form.color === c ? 'border-gray-900' : 'border-transparent'
+                  }`}
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
           </div>
+
           <button
             disabled={saving}
             className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium disabled:opacity-50"
@@ -141,7 +172,9 @@ export default function AccountsPage() {
               <div>
                 <p className="font-medium">{a.name}</p>
                 <p className="text-xs text-gray-500">
-                  {a.holder}{a.last_four ? ` • ••${a.last_four}` : ''}
+                  {TYPES.find(t => t.value === a.type)?.label}
+                  {a.holder ? ` • ${a.holder}` : ''}
+                  {a.last_four ? ` • ••${a.last_four}` : ''}
                 </p>
               </div>
             </div>

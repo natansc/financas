@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
+import CategorySelect from '@/components/CategorySelect'
 
 type Account = {
   id: string
@@ -58,7 +59,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
     type:
       initial?.amount_brl !== undefined
         ? (initial.amount_brl >= 0 ? 'receita' : 'despesa')
-        : 'despesa',
+        : ('despesa' as 'receita' | 'despesa'),
   })
 
   const [form, setForm] = useState<any>(buildForm())
@@ -337,41 +338,36 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         />
       </label>
 
-      {/* Categoria + mês fatura (à vista no cartão) */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Categoria — usa o combobox */}
+      <CategorySelect
+        value={form.category}
+        onChange={v => setForm({ ...form, category: v })}
+        kind={form.type}
+      />
+
+      {/* Mês da fatura: só quando é cartão, à vista, ou em edição */}
+      {showInstallmentUI && mode === 'single' && (
         <label className="block">
-          <span className="text-xs font-medium text-gray-600">Categoria</span>
+          <span className="text-xs font-medium text-gray-600">Mês da fatura</span>
           <input
-            type="text"
-            value={form.category}
-            onChange={e => setForm({ ...form, category: e.target.value })}
+            type="month"
+            value={form.first_invoice_month}
+            onChange={e => setForm({ ...form, first_invoice_month: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-base"
-            placeholder="Ex: Eletrônicos"
           />
         </label>
-        {showInstallmentUI && mode === 'single' && (
-          <label className="block">
-            <span className="text-xs font-medium text-gray-600">Mês da fatura</span>
-            <input
-              type="month"
-              value={form.first_invoice_month}
-              onChange={e => setForm({ ...form, first_invoice_month: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 text-base"
-            />
-          </label>
-        )}
-        {isEdit && isCreditCard && (
-          <label className="block">
-            <span className="text-xs font-medium text-gray-600">Mês da fatura</span>
-            <input
-              type="month"
-              value={form.first_invoice_month}
-              onChange={e => setForm({ ...form, first_invoice_month: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 text-base"
-            />
-          </label>
-        )}
-      </div>
+      )}
+      {isEdit && isCreditCard && (
+        <label className="block">
+          <span className="text-xs font-medium text-gray-600">Mês da fatura</span>
+          <input
+            type="month"
+            value={form.first_invoice_month}
+            onChange={e => setForm({ ...form, first_invoice_month: e.target.value })}
+            className="w-full border rounded-lg px-3 py-2 text-base"
+          />
+        </label>
+      )}
 
       {/* Preview das parcelas */}
       {mode === 'installment' && preview.length > 0 && (
