@@ -37,9 +37,18 @@ export async function POST(req: Request) {
   if (!checkToken(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const supabase = getSupabaseAdmin()
   const body = await req.json()
-  const { data, error } = await supabase.from('transactions').insert(body).select().single()
+
+  // Aceita um único objeto OU um array (para parcelamento)
+  const items = Array.isArray(body) ? body : [body]
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .insert(items)
+    .select()
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+
+  return NextResponse.json(Array.isArray(body) ? data : data?.[0])
 }
 
 export async function DELETE(req: Request) {
@@ -68,3 +77,4 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
+

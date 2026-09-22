@@ -42,7 +42,7 @@ export async function PATCH(req: Request) {
   const body = await req.json()
   const { id, ...updates } = body
   if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 })
-  const { data, error } = await supabase
+  const { data, error } = await supabase  
     .from('accounts')
     .update(updates)
     .eq('id', id)
