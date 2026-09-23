@@ -1,3 +1,5 @@
+import { resolveCategory } from '@/lib/categorize'
+
 export type ParsedTx = {
   purchase_date: string
   description: string
@@ -186,7 +188,8 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
     if (cleanDesc.length < 2) continue
 
     // Categoria do rabo
-    const category = extractItauCategory(tail || '')
+    const itauCat = extractItauCategory(tail || '')
+    const category = resolveCategory(itauCat, cleanDesc)
 
     txs.push({
       purchase_date,

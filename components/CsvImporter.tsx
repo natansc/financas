@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Papa, { ParseResult } from 'papaparse'
 import { api } from '@/lib/api'
+import { resolveCategory } from '@/lib/categorize'
 
 type CsvRow = Record<string, string>
 
@@ -66,9 +67,9 @@ export default function CsvImporter() {
               purchase_date: parseDate(getField(r, 'Data de Compra', 'Data', 'Date')),
               card_name: getField(r, 'Nome no Cartão', 'Nome', 'Titular') || 'Manual',
               card_last_four: getField(r, 'Final do Cartão', 'Final', 'Cartão') || '',
-              category: (() => {
+                category: (() => {
                 const c = getField(r, 'Categoria', 'Category')
-                return c && c !== '-' ? c.trim() : null
+                return resolveCategory(c && c !== '-' ? c.trim() : null, getField(r, 'Descrição', 'Description') || '')
               })(),
               description: getField(r, 'Descrição', 'Description', 'Estabelecimento') || '',
               installment: getField(r, 'Parcela', 'Installment') || 'Única',
