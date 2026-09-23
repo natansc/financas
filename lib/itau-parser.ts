@@ -1,38 +1,38 @@
 export type ParsedTx = {
-  purchase_date: string  // YYYY-MM-DD
+  purchase_date: string
   description: string
   amount_brl: number
   category: string | null
+  installment: string
 }
 
 export type ParsedInvoice = {
-  payment_date: string  // YYYY-MM-DD
-  invoice_month: string // YYYY-MM
+  payment_date: string
+  invoice_month: string
   holder: string | null
   card_last_four: string | null
   total: number | null
   transactions: ParsedTx[]
 }
 
-/** Regexes pros 2 layouts que você tem */
+// ---------- Header ----------
 const VENCIMENTO_1 = /Com vencimento em:\s*(\d{2})\/(\d{2})\/(\d{4})/i
 const VENCIMENTO_2 = /Vencimento:\s*(\d{2})\/(\d{2})\/(\d{4})/i
-const HOLDER = /Titular\s+([A-Z][A-Z\s]+?)\s+Cart[ãa]o\s+([\d.X]+)/i
+const HOLDER = /Titular\s+([A-ZÀ-Ú][A-ZÀ-Ú\s]+?)\s+Cart[ãa]o\s+([\d.X]+)/i
 const TOTAL = /O total da sua fatura é:\s*R\$\s*([\d.,]+)/i
 
-/** Linha de lançamento: "23/08 DESC 31,43" ou "23/08 DESC 1.792,70" */
-const LINE = /(\d{2})\/(\d{2})\s+([A-Za-zÀ-ú][A-Za-z0-9\s*'.\-À-ú]{2,60}?)\s+(\d{1,3}(?:\.\d{3})*,\d{2}|-\d{1,3}(?:\.\d{3})*,\d{2})/g
-
-/** Ignora essas linhas (cabeçalhos, totalizadores) */
-const BLACKLIST = [
-  /^total/i,
-  /^lan[çc]amentos/i,
-  /^pr[óo]xima fatura/i,
-  /^demais faturas/i,
-  /^pagamento/i,
-  /^valor total/i,
-  /^compras parceladas/i,
-  /^resumo da fatura/i,
+// ---------- Marcadores de seção ----------
+// Cada seção começa com um header e termina no próximo header (ou fim)
+const SECTION_STARTS: Array<{ key: string; regex: RegExp; parse: boolean }> = [
+  { key: 'pagamentos',  regex: /Pagamentos efetuados/i,                          parse: false },
+  { key: 'compras',     regex: /Lan[çc]amentos:\s*compras e saques/i,             parse: true  },
+  { key: 'produtos',    regex: /Lan[çc]amentos:\s*produtos e servi[çc]os/i,       parse: true  },
+  { key: 'contario',    regex: /Lan[çc]amentos:\s*cont[áa]rio/i,                  parse: true  },
+  { key: 'nocard',      regex: /Lan[çc]amentos no cart[ãa]o/i,                    parse: false },
+  { key: 'total',       regex: /Total dos lan[çc]amentos atuais/i,                parse: false },
+  { key: 'parceladas',  regex: /Compras parceladas\s*-\s*pr[óo]ximas faturas/i,   parse: false },
+  { key: 'limites',     regex: /Limites de cr[ée]dito/i,                          parse: false },
+  { key: 'encargos',    regex: /Encargos cobrados nesta fatura/i,                 parse: false },
 ]
 
 function toIso(y: number, m: number, d: number) {
@@ -43,101 +43,152 @@ function parseMoney(s: string): number {
   return parseFloat(s.replace(/\./g, '').replace(',', '.'))
 }
 
-/** Decide o ano da compra dado o mês da compra e o mês do vencimento */
 function inferYear(dia: number, mes: number, vencimento: Date): number {
-  const yVenc = vencimento.getFullYear()
-  const mVenc = vencimento.getMonth() + 1
-  // Se o mês da compra é maior que o mês do vencimento, é do ano anterior
-  // ex: compra 13/10, vencimento 08/09/2026 → compra 13/10/2025
-  if (mes > mVenc) return yVenc - 1
-  // Se for muito antes (6+ meses), pode ser ano anterior também
-  if (mVenc - mes > 6) return yVenc - 1
-  return yVenc
+  const yV = vencimento.getFullYear()
+  const mV = vencimento.getMonth() + 1
+  // Se compra é em mês posterior ao vencimento, é ano anterior (ex: compra out/2025, venc set/2026)
+  if (mes > mV) return yV - 1
+  return yV
 }
 
-/** Categorização automática por palavra-chave */
+/** Descobre o installment a partir da descrição (ex: "10/12" → "10/12") */
+function extractInstallment(desc: string): string {
+  // Procura padrão "X/Y" onde Y é entre 2 e 24 (indício de parcelamento)
+  const m = desc.match(/\b(\d{1,2})\/(\d{1,2})\b/)
+  if (m) {
+    const n = parseInt(m[1]); const total = parseInt(m[2])
+    if (total >= 2 && total <= 24 && n >= 1 && n <= total) {
+      return `${n}/${total}`
+    }
+  }
+  return 'Única'
+}
+
+/** Remove o "X/Y" da descrição pra não duplicar */
+function stripInstallment(desc: string): string {
+  return desc.replace(/\s*\b\d{1,2}\/\d{1,2}\b\s*$/, '').trim()
+}
+
+/** Categorização automática por keyword */
 function guessCategory(desc: string): string | null {
   const d = desc.toUpperCase()
-  if (/UBER|99|DL\s|TAXI|POSTO|COMBUST|ESTACIONAM|CONCESSION|PEDÁGIO|AUTO BAN|CRB|ECOVIAS|EIXO/.test(d)) return 'Transporte'
-  if (/SUPER|MERCAD|ASSAI|ATACAD|HIPER|MERCEARIA|PADARIA|BOLOS|JIM\.COM|SABOR|PAESE|CACAU|CHOCOLAT/.test(d)) return 'Supermercado'
-  if (/RESTAUR|LANCH|PIZZA|BURGER|IFD\*|SUBWAY|DOMINO|COSTEL|ARABE|BONANZA|GRILL|FLYPAY|BOTECO|PANIFICADORA/.test(d)) return 'Alimentação'
-  if (/DROGAR|FARMAC|RAIA|RDSAUDE|HOSPIT|H\.V\.B|PAGUEMENOS|HOSP|CL[ÍI]NICA|SAUDE/.test(d)) return 'Saúde'
+  if (/UBER|99\s|DL\s*\*?UBER|TAXI|POSTO|COMBUST|ESTACIONAM|CONCESSION|PED[ÁA]GIO|AUTO BAN|CRB FPAY|ECOVIAS|EIXO SP|ARARAQUARA|AUTO POSTO|POSTO SHELL|POSTO GEMA|POSTO KARAKA|POSTO TALISMA|POSTO BANDEIRANTE|POSTO PORTO|REDE DITO|REDE DE POSTOS|MARAJOCANAPOLIS|DELTADELTA/.test(d)) return 'Transporte'
+  if (/SUPER|MERCAD|ASSAI|ATACAD|HIPER|MERCEARIA|PADARIA|PAES|CACAU|CHOCOLAT|FESTIVAL DELLA PASTA|ROYAL TRUDEL|BISCOITOS|MBRESTAURANTE|PRO CARNES|FRIG GOIAS|JIM\.COM|CASA MARTINHO/.test(d)) return 'Supermercado'
+  if (/RESTAUR|LANCH|PIZZA|BURGER|IFD\*|SUBWAY|DOMINO|COSTEL|ARABE|BONANZA|GRILL|FLYPAY|BOTECO|PANIFICADORA|GEORGIA|VALORI|MALBEC|SEU CAFEEIRO|BEHONEST|T K BONSAI|DIETGYN|ESKINA|PROCAP|PRANA|VIANNA|T\. K\.|SA BOR|CHURRASCARIA|MIGUELITO|PANIFICADORA|WEULERBLENIO|EMPORIO 71|EMPORIO GUARAPUDO|MP \*TEMPERO|MP \*EMP[ÓO]RIO|MP \*LADOLESTE|MP \*WE PINK|MP \*LIVELO|MP \*MAURO|MP \*ARIES|MP \*MELIMAIS|MP \*REIDOCHURRASC|MP \*CAPIRINHA|IFD\*DESCMAIS|IFD\*LSJ|IFD\*VIANNA|IFD\*SABOR|IFD\*JUST|IFD\*BETA|IFD\*CASERATTO|IFD\*COMPANHIA/.test(d)) return 'Alimentação'
+  if (/DROGAR|FARMAC|RAIA|RDSAUDE|HOSPIT|H\.V\.B|PAGUEMENOS|PAGUE MENOS|CL[ÍI]NICA|SAUDE|SA[ÚU]DE|FARMALIVIA|PRO CARNES|G12ATACADO/.test(d)) return 'Saúde'
   if (/PET\s?LOVE|PETZ|BICHO|PETLOVE/.test(d)) return 'Pet'
-  if (/SKYFIT|ACADEM|CINEMARK|CINEMA|EVENTOS|INGRESSO|BORG|GALLERIA|URBANES|PRANA|DELTA FIT|CAPPTA/.test(d)) return 'Lazer'
-  if (/APPLE|NETFLIX|SPOTIFY|AMAZON PRIME|HBOMAX|HBO MAX|DISNEY|GLOBOPLAY|MELIMAIS|PRIME B|PRIME CANAIS/.test(d)) return 'Assinaturas'
-  if (/AMAZON|MERCADOLIVRE|SHOPEE|SHEIN|MAGAZ/.test(d)) return 'Outros'
-  if (/CLARO|VIVO|TIM|OI |NET |SERVICOS CLA|TELEFON/.test(d)) return 'Telefonia'
-  if (/VANS|CEA|RIACHUEL|DAFITI|MODA|VESTU|MY CURVES|L&B|L & B|LISO PERFEITO/.test(d)) return 'Vestuário'
-  if (/DECOLAR|AZUL|LATAM|GOL |LOCAUTO|POUSADA|HOTEL|BOOKING|TURISMO|HOSTEL|VIAG/.test(d)) return 'Viagem'
+  if (/SKYFIT|ACADEM|CINEMARK|CINEMA|INGRESSO|GALLERIA|URBANES|DELTA FIT|CAPPTA|PRANA EVENTOS|JIM\.COM\*TAVERNA|JIM\.COM\*492/.test(d)) return 'Lazer'
+  if (/APPLE|NETFLIX|NET FLIX|SPOTIFY|AMAZON PRIME|HBOMAX|HBO MAX|DISNEY|GLOBOPLAY|MELIMAIS|PRIME B|PRIME CANAIS|MELIMAISOS|MELIMAIS OS/.test(d)) return 'Assinaturas'
+  if (/AMAZON|MERCADOLIVRE|SHOPEE|SHEIN|MAGAZ|ALIEXPRESS/.test(d)) return 'Outros'
+  if (/CLARO|VIVO|TIM|SERVICOS CLA|TELEFON/.test(d)) return 'Telefonia'
+  if (/VANS|CEA |MODA|VESTU|MY CURVES|L & B|L\s*&\s*B|LISO PERFEITO|LOJAS RIACHUEL|DAFITI|ZP \*SOLUTI|VINDI|BELEZA NA WEB|INOVAR COSMETIC|MISS MAKE|AMOBELEZA/.test(d)) return 'Vestuário'
+  if (/DECOLAR|AZUL|LATAM|GOL |LOCAUTO|POUSADA|HOTEL|BOOKING|TURISMO|HOSTEL|VIAG|UBER\*TRIP|SP HOLAFLY|AZULVIA|HP \*|H\.V\.B/.test(d)) return 'Viagem'
   if (/ANUIDADE|ITA[ÚU] AVISA|IOF|TARIFA|MENSALID/.test(d)) return 'Tarifas'
-  if (/AMAZON BR|AMAZON MARKET|EDUCAC|STORE|EC \*G|EC\*G/.test(d)) return 'Educação'
-  if (/CONSTRU|LOJAS AMERICANAS|CASA|MADER|MATERIAL|BIG LAR|REDE DA CONSTRU/.test(d)) return 'Casa'
-  if (/CONTABIL|ASA \*|ASA\*|SENHOR CONTAB|ARIESBARB|LISO PERF|PAGUE MENOS|SERVI[ÇC]OS/.test(d)) return 'Serviços'
-  if (/RAIA DROG|PAGUE MENOS|FARMACIA PAG/.test(d)) return 'Farmácia'
+  if (/AMAZON BR|AMAZON MARKET|EDUCAC|STORE IMPACT|EC \*G|EC\*G|ALURA|UDEMY|HOTMART/.test(d)) return 'Educação'
+  if (/CONSTRU|LOJAS AMERICANAS|MADER|MATERIAL|BIG LAR|REDE DA CONSTRU|MULTICOLOR TINTAS|MOBILIA/.test(d)) return 'Casa'
+  if (/CONTABIL|ASA \*|ASA\*|SENHOR CONTAB|ARIESBARB|A[ÁA]UCENA|LISO PERF|SERVI[ÇC]OS|DANIEL RIBEIRO|WELLINGTON|JANAINA|WESLEY/.test(d)) return 'Serviços'
+  if (/LGPD|CONS[ÓO]RCIO|EMPR[ÉE]STIMO/.test(d)) return 'Consórcio'
   return null
 }
 
+/** Fatia o texto nas seções corretas */
+function sliceSections(text: string): string[] {
+  // Acha posições de cada section header
+  const matches: Array<{ idx: number; len: number; parse: boolean }> = []
+  for (const s of SECTION_STARTS) {
+    const re = new RegExp(s.regex.source, 'gi')
+    let m: RegExpExecArray | null
+    while ((m = re.exec(text)) !== null) {
+      matches.push({ idx: m.index, len: m[0].length, parse: s.parse })
+    }
+  }
+  matches.sort((a, b) => a.idx - b.idx)
+
+  // Fatia entre cada header
+  const sections: string[] = []
+  for (let i = 0; i < matches.length; i++) {
+    if (!matches[i].parse) continue
+    const start = matches[i].idx + matches[i].len
+    const end = i + 1 < matches.length ? matches[i + 1].idx : text.length
+    sections.push(text.slice(start, end))
+  }
+  return sections
+}
+
+/** Regex que casa "DD/MM [desc] valor" com o valor como âncora */
+// desc: começa com letra maiúscula ou * e vai até encontrar o valor
+// valor: -?1.234,56
+const TX_REGEX = /(\d{2})\/(\d{2})([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\s\S]{2,90}?)(-?\d{1,3}(?:\.\d{3})*,\d{2})/g
+
+/** Ignora linhas que são claramente cabeçalho ou subtotal */
+const BLACKLIST = [
+  /^data\b/i, /^estabelecimento/i, /^valor em/i, /^total\b/i,
+  /^lan[çc]amento/i, /^lan[çc]amentos/i, /^pr[óo]xima fatura/i,
+  /^demais faturas/i, /^pagamento/i, /^resumo/i, /^valor total/i,
+  /^compras parceladas/i, /^limite/i, /^encargos/i, /^juros/i,
+  /^multa/i, /^iof/i, /^cr[ée]dito rotativo/i, /^novo teto/i,
+  /^simula/i, /^de retirada/i, /^de pagamento/i, /^fique atento/i,
+  /^juros m[áa]ximos/i, /^ao contratar/i, /^essa fatura/i, /^saldo/i,
+]
+
 export function parseItauPdf(text: string): ParsedInvoice {
-  // 1. Pega vencimento (tenta os 2 padrões)
-  let vencMatch = text.match(VENCIMENTO_1) || text.match(VENCIMENTO_2)
-  if (!vencMatch) throw new Error('Não consegui achar a data de vencimento no PDF')
+  const vencMatch = text.match(VENCIMENTO_1) || text.match(VENCIMENTO_2)
+  if (!vencMatch) throw new Error('Vencimento não encontrado no PDF')
 
   const [, vd, vm, vy] = vencMatch
   const vencimento = new Date(parseInt(vy), parseInt(vm) - 1, parseInt(vd))
   const payment_date = toIso(parseInt(vy), parseInt(vm), parseInt(vd))
   const invoice_month = `${vy}-${vm}`
 
-  // 2. Holder / final do cartão
   const holderMatch = text.match(HOLDER)
   const holder = holderMatch ? holderMatch[1].trim() : null
-  const card_last_four = holderMatch ? holderMatch[2].replace(/[.\s]/g, '').slice(-4) : null
+  const card_last_four = holderMatch ? holderMatch[2].replace(/[.\sX]/g, '').slice(-4) : null
 
-  // 3. Total
   const totalMatch = text.match(TOTAL)
   const total = totalMatch ? parseMoney(totalMatch[1]) : null
 
-  // 4. Lançamentos
-  const transactions: ParsedTx[] = []
+  // 1. Fatia nas seções
+  const sections = sliceSections(text)
+
+  // 2. Extrai de cada seção
+  const txs: ParsedTx[] = []
   const seen = new Set<string>()
 
-  let m: RegExpExecArray | null
-  LINE.lastIndex = 0
-  while ((m = LINE.exec(text)) !== null) {
-    const [, dd, mm, desc, val] = m
+  for (const section of sections) {
+    TX_REGEX.lastIndex = 0
+    let m: RegExpExecArray | null
+    while ((m = TX_REGEX.exec(section)) !== null) {
+      const [, dd, mm, rawDesc, rawVal] = m
 
-    // Ignora linhas de cabeçalho
-    if (BLACKLIST.some(rx => rx.test(desc.trim()))) continue
+      const desc = rawDesc.trim().replace(/\s+/g, ' ')
+      if (BLACKLIST.some(rx => rx.test(desc))) continue
+      if (desc.length < 3) continue
 
-    const dia = parseInt(dd)
-    const mes = parseInt(mm)
-    if (dia < 1 || dia > 31 || mes < 1 || mes > 12) continue
+      const dia = parseInt(dd); const mes = parseInt(mm)
+      if (dia < 1 || dia > 31 || mes < 1 || mes > 12) continue
 
-    const amount = parseMoney(val)
-    // valor negativo no PDF significa estorno → positivo no nosso banco
-    const amountBrl = -Math.abs(amount)
+      const amount = parseMoney(rawVal)
+      const amountBrl = -Math.abs(amount) // valores positivos no PDF = despesa
 
-    const year = inferYear(dia, mes, vencimento)
-    const purchase_date = toIso(year, mes, dia)
+      const year = inferYear(dia, mes, vencimento)
+      const purchase_date = toIso(year, mes, dia)
 
-    // Chave de deduplicação (mesma linha lida 2x pelo regex)
-    const key = `${purchase_date}|${desc}|${amountBrl}`
-    if (seen.has(key)) continue
-    seen.add(key)
+      const installment = extractInstallment(desc)
+      const cleanDesc = installment !== 'Única' ? stripInstallment(desc) : desc
 
-    transactions.push({
-      purchase_date,
-      description: desc.trim().replace(/\s+/g, ' '),
-      amount_brl: amountBrl,
-      category: guessCategory(desc),
-    })
+      const key = `${purchase_date}|${cleanDesc}|${amountBrl}|${installment}`
+      if (seen.has(key)) continue
+      seen.add(key)
+
+      txs.push({
+        purchase_date,
+        description: cleanDesc,
+        amount_brl: amountBrl,
+        category: guessCategory(cleanDesc),
+        installment,
+      })
+    }
   }
 
-  return {
-    payment_date,
-    invoice_month,
-    holder,
-    card_last_four,
-    total,
-    transactions,
-  }
+  return { payment_date, invoice_month, holder, card_last_four, total, transactions: txs }
 }
