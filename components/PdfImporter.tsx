@@ -36,12 +36,13 @@ export default function PdfImporter() {
     })
   }, [])
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setLoading(true); setError(null); setResult(null); setSaveMsg(null)
 
     try {
+      console.log('Enviando:', file.name, file.size)
       const fd = new FormData()
       fd.append('file', file)
       const res = await fetch('/api/parse-pdf', {
@@ -50,10 +51,17 @@ export default function PdfImporter() {
         body: fd,
       })
       const json = await res.json()
-      if (json.error) throw new Error(json.error)
+      console.log('Resposta:', json)
+
+      if (!res.ok || json.error) {
+        const msg = json.hint
+          ? `${json.error}\n\n${json.hint}`
+          : json.error || `HTTP ${res.status}`
+        throw new Error(msg)
+      }
       setResult(json)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'erro')
+      setError(err instanceof Error ? err.message : 'erro desconhecido')
     } finally {
       setLoading(false)
       e.target.value = ''
@@ -134,7 +142,11 @@ export default function PdfImporter() {
       </label>
 
       {loading && <p className="text-sm text-gray-500">Lendo PDF...</p>}
-      {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">Erro: {error}</p>}
+      {error && (
+        <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg whitespace-pre-wrap">
+          <b>Erro:</b> {error}
+        </div>
+      )}
 
       {result && (
         <>

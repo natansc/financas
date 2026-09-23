@@ -206,7 +206,12 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
 // ============================================================
 // 5. Header do PDF
 // ============================================================
-const RE_VENC  = /(?:Com vencimento em|Vencimento)\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i
+const RE_VENC_LIST = [
+  /Com vencimento em\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i,
+  /Vencimento\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i,
+  /Vencto\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i,
+  /Venc\.\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i,
+]
 const RE_HOLD  = /Titular\s+([A-ZÀ-Ú][A-ZÀ-Ú\s]+?)\s+Cart/i
 const RE_CARD  = /Cart[ãa]o\s+([\d.X]+)/i
 const RE_TOTAL = /total da sua fatura é:\s*R\$\s*([\d.,]+)/i
@@ -217,8 +222,17 @@ const RE_TOTAL = /total da sua fatura é:\s*R\$\s*([\d.,]+)/i
 export function parseItauPdf(rawText: string): ParsedInvoice {
   const text = rawText.normalize('NFC')
 
-  const venc = text.match(RE_VENC)
-  if (!venc) throw new Error('Vencimento não encontrado no PDF')
+let venc: RegExpMatchArray | null = null
+for (const rx of RE_VENC_LIST) {
+  venc = text.match(rx)
+  if (venc) break
+}
+if (!venc) {
+  // Último recurso: pega a primeira data DD/MM/YYYY que apareça perto de "vencimento"
+  const fallback = text.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  if (!fallback) throw new Error('Vencimento não encontrado no PDF. Formato não reconhecido.')
+  venc = fallback
+}
   const [, vd, vm, vy] = venc
   const vencimento = new Date(+vy, +vm - 1, +vd)
   const payment_date = toIso(+vy, +vm, +vd)
