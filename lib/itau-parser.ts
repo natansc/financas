@@ -16,7 +16,7 @@ export type ParsedInvoice = {
 }
 
 // ============================================================
-// 1. BLOCOS — pares (início, fim) mapeados por você
+// 1. BLOCOS — início e fim de cada seção que queremos ler
 // ============================================================
 const BLOCKS: Array<{ start: RegExp; end: RegExp }> = [
   {
@@ -34,8 +34,8 @@ const BLOCKS: Array<{ start: RegExp; end: RegExp }> = [
 ]
 
 /**
- * Acha cada bloco no texto e devolve o conteúdo entre (start fim) do "início"
- * e o "fim". Suporta múltiplas ocorrências do mesmo bloco (Itaú repete).
+ * Fatia o texto nos blocos mapeados. Suporta múltiplas ocorrências do
+ * mesmo bloco (o Itaú repete em faturas diferentes).
  */
 function sliceBlocks(text: string): string[] {
   const slices: string[] = []
@@ -46,15 +46,13 @@ function sliceBlocks(text: string): string[] {
     while ((mStart = start.exec(text)) !== null) {
       const from = mStart.index + mStart[0].length
 
-      // procura o "end" a partir do início do bloco
       end.lastIndex = from
       const mEnd = end.exec(text)
       const to = mEnd ? mEnd.index : text.length
 
-      // só considera se o trecho é razoável
       if (to - from > 10) slices.push(text.slice(from, to))
 
-      // continua a busca do próximo start DEPOIS desse bloco
+      // Continua a busca DEPOIS do fim desse bloco
       start.lastIndex = to
     }
   }
@@ -99,45 +97,59 @@ function stripInstallment(desc: string): string {
 }
 
 // ============================================================
-// 3. Categoria — pega do rodapé que o próprio Itaú coloca
+// 3. Categoria — sempre normalizada (minúsculo, sem acento)
 // ============================================================
+/**
+ * Normaliza: minúsculo, sem acento, sem pontuação.
+ * Isso garante que "Lazer", "lazer", "LAZER", "lazér" todos virem "lazer".
+ */
+function normalize(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')   // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')      // pontuação → espaço
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Mapa: chaves SEMPRE minúsculas e sem acento */
 const ITAU_CATS: Record<string, string> = {
-  'outros': 'Outros', 'outras': 'Outros', 'diversos': 'Outros',
-  'supermercado': 'Supermercado', 'supermarket': 'Supermercado',
-  'lazer': 'Lazer',
-  'viagem': 'Viagem', 'viaagem': 'Viagem', 'hotel': 'Viagem',
-  'veículos': 'Transporte', 'veiculos': 'Transporte', 'transporte': 'Transporte',
-  'saúde': 'Saúde', 'saude': 'Saúde',
-  'casa': 'Casa',
-  'educação': 'Educação', 'educacao': 'Educação',
-  'vestuário': 'Vestuário', 'vestuario': 'Vestuário',
-  'serviços': 'Serviços', 'servicos': 'Serviços',
-  'restaurante': 'Alimentação', 'alimentação': 'Alimentação', 'alimentacao': 'Alimentação',
-  'farmácia': 'Farmácia', 'farmacia': 'Farmácia',
-  'petshop': 'Pet', 'pet': 'Pet',
-  'posto': 'Combustível', 'combustível': 'Combustível', 'combustivel': 'Combustível',
+  'outros':         'Outros',
+  'outras':         'Outros',
+  'diversos':       'Outros',
+  'supermercado':   'Supermercado',
+  'supermarket':    'Supermercado',
+  'lazer':          'Lazer',
+  'viagem':         'Viagem',
+  'viaagem':        'Viagem',
+  'hotel':          'Viagem',
+  'turismo':        'Viagem',
+  'veiculos':       'Transporte',
+  'transporte':     'Transporte',
   'estacionamento': 'Transporte',
-  'automobile': 'Outros',
-  'turismo': 'Viagem',
-  'hobby': 'Outros',
-  'estudário': 'Educação', 'estudario': 'Educação',
+  'saude':          'Saúde',
+  'casa':           'Casa',
+  'educacao':       'Educação',
+  'estudario':      'Educação',
+  'vestuario':      'Vestuário',
+  'servicos':       'Serviços',
+  'restaurante':    'Alimentação',
+  'alimentacao':    'Alimentação',
+  'farmacia':       'Farmácia',
+  'petshop':        'Pet',
+  'pet':            'Pet',
+  'posto':          'Combustível',
+  'combustivel':    'Combustível',
+  'automobile':     'Outros',
+  'hobby':          'Outros',
 }
 
 function extractItauCategory(tail: string): string | null {
   if (!tail) return null
-  const cleaned = tail.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-  const parts = cleaned.split(/\s+/)
+  const parts = normalize(tail).split(/\s+/)
   for (const p of parts) {
     if (ITAU_CATS[p]) return ITAU_CATS[p]
-    // tenta também com acento (fallback)
-    if (ITAU_CATS[tail.split(/\s+/).find(x => x.toLowerCase() === p) || '']) {
-      return ITAU_CATS[tail.split(/\s+/).find(x => x.toLowerCase() === p) || '']
-    }
-  }
-  // fallback: tenta sem normalizar
-  for (const p of tail.split(/\s+/)) {
-    const direct = ITAU_CATS[p.toLowerCase()]
-    if (direct) return direct
   }
   return null
 }
@@ -146,7 +158,7 @@ function extractItauCategory(tail: string): string | null {
 // 4. Extração de uma linha dentro de um bloco
 // ============================================================
 /**
- * Cada linha do Itaú (quando o texto é extraído) fica assim:
+ * Cada linha do Itaú (texto extraído do PDF) fica assim:
  *   "23/08MP *HBOMAXASSINOSASCOBR31,43outros OSASCO"
  * ou
  *   "01/08SUPER LIMA APARECIDA DEB149,36supermercado APARECIDA DE"
@@ -206,7 +218,7 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
 }
 
 // ============================================================
-// 5. Header
+// 5. Header do PDF
 // ============================================================
 const RE_VENC  = /(?:Com vencimento em|Vencimento)\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i
 const RE_HOLD  = /Titular\s+([A-ZÀ-Ú][A-ZÀ-Ú\s]+?)\s+Cart/i
@@ -241,7 +253,7 @@ export function parseItauPdf(rawText: string): ParsedInvoice {
     all.push(...parseBlock(block, vencimento))
   }
 
-  // Deduplica global (mesma compra pode aparecer 2x se bloco repetido)
+  // Deduplica global
   const seen = new Set<string>()
   const transactions: ParsedTx[] = []
   for (const t of all) {
