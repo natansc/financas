@@ -18,9 +18,8 @@ type Props = {
   onClose: () => void
 }
 
-const INSTALLMENT_OPTIONS = Array.from({ length: 23 }, (_, i) => i + 2) // 2..24
+const INSTALLMENT_OPTIONS = Array.from({ length: 23 }, (_, i) => i + 2)
 
-/** Divide R$ total em N parcelas; ajusta a última para fechar sem erro de centavo */
 function splitInstallments(total: number, n: number): number[] {
   const totalCents = Math.round(total * 100)
   const baseCents = Math.floor(totalCents / n)
@@ -29,11 +28,17 @@ function splitInstallments(total: number, n: number): number[] {
   return arr.map(c => c / 100)
 }
 
-/** "2026-09" + 2 → "2026-11" */
 function addMonths(yyyymm: string, n: number): string {
   const [y, m] = yyyymm.split('-').map(Number)
   const d = new Date(y, m - 1 + n, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Próximo vencimento padrão (dia 08 do mês que vem) */
+function defaultPaymentDate(): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() + 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-08`
 }
 
 export default function TransactionForm({ accounts, initial, onSaved, onClose }: Props) {
@@ -46,8 +51,8 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
     id: initial?.id,
     account_id: initial?.account_id || accounts[0]?.id || '',
     purchase_date: initial?.purchase_date || new Date().toISOString().slice(0, 10),
-    first_invoice_month:
-      initial?.invoice_month || new Date().toISOString().slice(0, 7),
+    payment_date: initial?.payment_date || defaultPaymentDate(),
+    first_invoice_month: initial?.invoice_month || new Date().toISOString().slice(0, 7),
     description: initial?.description || '',
     category: initial?.category || '',
     amount:
@@ -77,7 +82,6 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
   const parseValue = (s: string) =>
     parseFloat(String(s).replace(/\./g, '').replace(',', '.'))
 
-  // Preview das parcelas
   const preview = useMemo(() => {
     if (mode !== 'installment') return []
     const total = parseValue(form.total)
@@ -90,6 +94,9 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
     }))
   }, [mode, form.total, form.installments, form.first_invoice_month])
 
+  /** Calcula o payment_date final */
+  const finalPaymentDate = isCreditCard ? form.payment_date : form.purchase_date
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.account_id) return alert('Cadastre uma conta primeiro')
@@ -98,7 +105,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
     setFeedback(null)
 
     try {
-      // ---------- EDIÇÃO ----------
+      // EDIÇÃO
       if (isEdit) {
         const value = parseValue(form.amount)
         if (isNaN(value)) throw new Error('Valor inválido')
@@ -107,6 +114,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
           id: form.id,
           account_id: form.account_id,
           purchase_date: form.purchase_date,
+          payment_date: finalPaymentDate,
           invoice_month: isCreditCard ? form.first_invoice_month : null,
           description: form.description,
           category: form.category || null,
@@ -118,29 +126,33 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         return
       }
 
-      // ---------- CRIAÇÃO PARCELADA ----------
+      // CRIAÇÃO PARCELADA
       if (mode === 'installment') {
         const total = parseValue(form.total)
         if (isNaN(total) || total <= 0) throw new Error('Valor total inválido')
         if (form.installments < 2) throw new Error('Mínimo 2 parcelas')
 
         const values = splitInstallments(total, form.installments)
-        const payload = values.map((v, i) => ({
-          account_id: form.account_id,
-          purchase_date: form.purchase_date,
-          invoice_month: addMonths(form.first_invoice_month, i),
-          description: form.description,
-          category: form.category || null,
-          amount_brl: form.type === 'despesa' ? -v : v,
-          installment: `${i + 1}/${form.installments}`,
-          card_name: 'Manual',
-          card_last_four: '',
-          source: 'manual',
-        }))
+        const payload = values.map((v, i) => {
+          const month = addMonths(form.first_invoice_month, i)
+          return {
+            account_id: form.account_id,
+            purchase_date: form.purchase_date,
+            payment_date: `${month}-08`,
+            invoice_month: month,
+            description: form.description,
+            category: form.category || null,
+            amount_brl: form.type === 'despesa' ? -v : v,
+            installment: `${i + 1}/${form.installments}`,
+            card_name: 'Manual',
+            card_last_four: '',
+            source: 'manual',
+          }
+        })
         const res = await api.post('/api/transactions', payload)
         if (res?.error) throw new Error(res.error)
       }
-      // ---------- CRIAÇÃO À VISTA ----------
+      // CRIAÇÃO À VISTA
       else {
         const value = parseValue(form.amount)
         if (isNaN(value)) throw new Error('Valor inválido')
@@ -148,6 +160,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         const res = await api.post('/api/transactions', {
           account_id: form.account_id,
           purchase_date: form.purchase_date,
+          payment_date: finalPaymentDate,
           invoice_month: isCreditCard ? form.first_invoice_month : null,
           description: form.description,
           category: form.category || null,
@@ -161,7 +174,6 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
       }
 
       onSaved()
-      // mantém conta/data/tipo e limpa o resto
       setForm((f: any) => ({
         ...f,
         description: '',
@@ -229,7 +241,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         </select>
       </label>
 
-      {/* Toggle À vista / Parcelado */}
+      {/* Toggle à vista / parcelado */}
       {showInstallmentUI && (
         <div className="flex gap-2 bg-gray-50 p-1 rounded-lg">
           {(['single', 'installment'] as const).map(m => (
@@ -247,7 +259,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         </div>
       )}
 
-      {/* Data + valor: À VISTA */}
+      {/* Data + valor */}
       {(mode === 'single' || !showInstallmentUI) && (
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
@@ -275,7 +287,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         </div>
       )}
 
-      {/* Data + valor: PARCELADO */}
+      {/* Data + valor: parcelado */}
       {showInstallmentUI && mode === 'installment' && (
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
@@ -338,32 +350,38 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         />
       </label>
 
-      {/* Categoria — usa o combobox */}
+      {/* Categoria */}
       <CategorySelect
         value={form.category}
         onChange={v => setForm({ ...form, category: v })}
         kind={form.type}
       />
 
-      {/* Mês da fatura: só quando é cartão, à vista, ou em edição */}
-      {showInstallmentUI && mode === 'single' && (
+      {/* Vencimento — só pra cartão de crédito, à vista */}
+      {isCreditCard && mode === 'single' && (
         <label className="block">
-          <span className="text-xs font-medium text-gray-600">Mês da fatura</span>
+          <span className="text-xs font-medium text-gray-600">
+            Vencimento da fatura
+          </span>
           <input
-            type="month"
-            value={form.first_invoice_month}
-            onChange={e => setForm({ ...form, first_invoice_month: e.target.value })}
+            type="date"
+            value={form.payment_date}
+            onChange={e => setForm({ ...form, payment_date: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-base"
           />
+          <span className="text-xs text-gray-400">
+            Quando esse valor realmente sai da sua conta. Padrão: dia 08 do próximo mês.
+          </span>
         </label>
       )}
+
       {isEdit && isCreditCard && (
         <label className="block">
-          <span className="text-xs font-medium text-gray-600">Mês da fatura</span>
+          <span className="text-xs font-medium text-gray-600">Vencimento da fatura</span>
           <input
-            type="month"
-            value={form.first_invoice_month}
-            onChange={e => setForm({ ...form, first_invoice_month: e.target.value })}
+            type="date"
+            value={form.payment_date}
+            onChange={e => setForm({ ...form, payment_date: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-base"
           />
         </label>
@@ -374,23 +392,15 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         <div className="bg-blue-50 rounded-lg p-3">
           <p className="text-xs font-medium text-blue-800 mb-2">
             {preview.length}x de{' '}
-            {preview[0].value.toLocaleString('pt-BR', {
-              style: 'currency',
-              currency: 'BRL',
-            })}
+            {preview[0].value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             {' '}(última pode variar 1 centavo)
           </p>
           <div className="max-h-40 overflow-auto text-xs space-y-0.5">
             {preview.map(p => (
               <div key={p.n} className="flex justify-between text-blue-700">
+                <span>{p.n}/{form.installments} • venc {p.month}-08</span>
                 <span>
-                  {p.n}/{form.installments} • {p.month}
-                </span>
-                <span>
-                  {p.value.toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  })}
+                  {p.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               </div>
             ))}
