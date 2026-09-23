@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, checkToken } from '@/lib/supabase-admin'
 
+
 export async function POST(req: Request) {
   if (!checkToken(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  
 
   const { account_id, invoice_month, rows } = await req.json()
 
@@ -14,7 +16,8 @@ export async function POST(req: Request) {
 
   const payload = rows.map((r: any) => ({
     account_id,
-    invoice_month: invoice_month || null,
+    payment_date: r.payment_date || r.purchase_date,   // ← novo
+    invoice_month: r.invoice_month || null,
     purchase_date: r.purchase_date,
     card_name: r.card_name,
     card_last_four: r.card_last_four,
