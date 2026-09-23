@@ -7,6 +7,7 @@ type ParsedTx = {
   description: string
   amount_brl: number
   category: string | null
+  installment: string
 }
 
 type ParsedInvoice = {
@@ -75,21 +76,26 @@ export default function PdfImporter() {
     if (!result || !accountId) return
     setSaving(true); setSaveMsg(null)
 
-    const payload = result.transactions.map(t => ({
-      account_id: accountId,
+    // Formato que o endpoint /api/import espera
+    const rows = result.transactions.map(t => ({
       purchase_date: t.purchase_date,
       payment_date: result.payment_date,
       invoice_month: result.invoice_month,
       description: t.description,
       category: t.category,
       amount_brl: t.amount_brl,
-      installment: 'Única',
+      installment: t.installment,
       card_name: result.holder || 'Manual',
       card_last_four: result.card_last_four || '',
       source: 'manual',
     }))
 
-    const res = await api.post('/api/import', payload)
+    const res = await api.post('/api/import', {
+      account_id: accountId,
+      invoice_month: result.invoice_month,
+      rows,
+    })
+
     setSaving(false)
     if (res?.error) {
       setSaveMsg('Erro: ' + res.error)
@@ -99,7 +105,8 @@ export default function PdfImporter() {
     }
   }
 
-  const total = result?.transactions.reduce((s, t) => s + Math.abs(t.amount_brl), 0) || 0
+  const totalBruto = result?.transactions.reduce((s, t) => s + Math.abs(t.amount_brl), 0) || 0
+  const totalComSinal = result?.transactions.reduce((s, t) => s + t.amount_brl, 0) || 0
 
   return (
     <div className="space-y-4">
@@ -137,11 +144,17 @@ export default function PdfImporter() {
             <p className="text-sm">
               Vencimento: <b>{result.payment_date.split('-').reverse().join('/')}</b>
               {' '}• {result.transactions.length} lançamentos
-              {' '}• Total: <b>R$ {total.toFixed(2)}</b>
+              {' '}• Bruto: <b>R$ {totalBruto.toFixed(2)}</b>
             </p>
-            {result.total && Math.abs(total - result.total) > 1 && (
+            <p className="text-xs text-gray-500">
+              Saldo real:{' '}
+              <span className={totalComSinal < 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
+                {totalComSinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </span>
+            </p>
+            {result.total && Math.abs(totalBruto - result.total) > 5 && (
               <p className="text-xs text-amber-600 mt-2">
-                ⚠️ Soma dos lançamentos (R$ {total.toFixed(2)}) difere do total da fatura (R$ {result.total.toFixed(2)}). Alguma linha pode não ter sido lida.
+                ⚠️ Soma dos lançamentos (R$ {totalBruto.toFixed(2)}) difere do total da fatura (R$ {result.total.toFixed(2)}).
               </p>
             )}
           </div>
@@ -161,9 +174,16 @@ export default function PdfImporter() {
                     <input
                       type="text"
                       value={t.category || ''}
-                      onChange={e => updateTx(i, { category: e.target.value })}
+                      onChange={e => updateTx(i, { category: e.target.value || null })}
                       className="text-xs border rounded px-2 py-1 w-28"
                       placeholder="categoria"
+                    />
+                    <input
+                      type="text"
+                      value={t.installment}
+                      onChange={e => updateTx(i, { installment: e.target.value })}
+                      className="text-xs border rounded px-2 py-1 w-16"
+                      placeholder="X/Y"
                     />
                     <button
                       onClick={() => removeTx(i)}
@@ -178,8 +198,8 @@ export default function PdfImporter() {
                     onChange={e => updateTx(i, { description: e.target.value })}
                     className="w-full text-sm border-0 p-0 focus:ring-0"
                   />
-                  <p className="text-sm font-semibold text-red-600">
-                    R$ {Math.abs(t.amount_brl).toFixed(2)}
+                  <p className={`text-sm font-semibold ${t.amount_brl < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {t.amount_brl < 0 ? '−' : '+'} R$ {Math.abs(t.amount_brl).toFixed(2)}
                   </p>
                 </li>
               ))}

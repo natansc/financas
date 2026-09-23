@@ -16,7 +16,7 @@ export type ParsedInvoice = {
 }
 
 // ============================================================
-// 1. BLOCOS — início e fim de cada seção (mapeados por você)
+// 1. BLOCOS
 // ============================================================
 const BLOCKS: Array<{ start: RegExp; end: RegExp }> = [
   {
@@ -64,7 +64,6 @@ function parseMoney(s: string): number {
   return parseFloat(s.replace(/\./g, '').replace(',', '.'))
 }
 
-/** Se compra é em mês posterior ao vencimento → ano anterior */
 function inferYear(dia: number, mes: number, vencimento: Date): number {
   const yV = vencimento.getFullYear()
   const mV = vencimento.getMonth() + 1
@@ -72,7 +71,6 @@ function inferYear(dia: number, mes: number, vencimento: Date): number {
   return yV
 }
 
-/** Detecta "X/Y" de parcelamento */
 function extractInstallment(desc: string): string {
   const m = desc.match(/\b(\d{1,2})\/(\d{1,2})\b/)
   if (m) {
@@ -87,16 +85,15 @@ function stripInstallment(desc: string): string {
 }
 
 // ============================================================
-// 3. Extração — regex com sinal negativo opcional
+// 3. Extração
 // ============================================================
 /**
  * Regex global sobre o bloco:
- *   "DD/MM" + descrição (1-120 chars, lazy) + valor (com - opcional)
+ *   "DD/MM" + descrição (1-300 chars, lazy) + valor (com - opcional)
  *
- * O valor é a âncora. Cada match consome até o valor.
- * O sinal negativo é capturado como parte do valor.
+ * Valor é a âncora. Cada match consome até o valor (inclusive).
  */
-const RE_TX = /(\d{2})\/(\d{2})([\s\S]{1,120}?)(-?\d{1,3}(?:\.\d{3})*,\d{2})/g
+const RE_TX = /(\d{2})\/(\d{2})([\s\S]{1,300}?)(-?\d{1,3}(?:\.\d{3})*,\d{2})/g
 
 function parseBlock(block: string, vencimento: Date): ParsedTx[] {
   const txs: ParsedTx[] = []
@@ -126,11 +123,10 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
       desc = desc + rawVal[0]
     }
 
-    // Valor: o PDF mostra compras como positivas e estornos como negativas.
-    // No banco é o oposto: compras são negativas, estornos positivos.
-    // Então basta NEGAR o valor do PDF.
-    const pdfValue = parseMoney(rawVal)          // ex: 62,00 ou -31,00
-    const amountBrl = -pdfValue                  // ex: -62.00 ou 31.00
+    // Sinal: o PDF mostra compras como positivas e estornos como negativas.
+    // No banco é o oposto → negamos o valor.
+    const pdfValue = parseMoney(rawVal)
+    const amountBrl = -pdfValue
 
     const year = inferYear(dia, mes, vencimento)
     const purchase_date = toIso(year, mes, dia)
@@ -180,7 +176,6 @@ export function parseItauPdf(rawText: string): ParsedInvoice {
   const totalMatch = text.match(RE_TOTAL)
   const total = totalMatch ? parseMoney(totalMatch[1]) : null
 
-  // Fatia os blocos e extrai de cada um
   const blocks = sliceBlocks(text)
   const transactions: ParsedTx[] = []
   for (const b of blocks) transactions.push(...parseBlock(b, vencimento))
