@@ -33,10 +33,6 @@ const BLOCKS: Array<{ start: RegExp; end: RegExp }> = [
   },
 ]
 
-/**
- * Fatia o texto nos blocos mapeados. Suporta múltiplas ocorrências
- * do mesmo bloco (o Itaú repete o cabeçalho).
- */
 function sliceBlocks(text: string): string[] {
   const slices: string[] = []
 
@@ -50,8 +46,6 @@ function sliceBlocks(text: string): string[] {
       const to = mEnd ? mEnd.index : text.length
 
       if (to - from > 5) slices.push(text.slice(from, to))
-
-      // Continua a busca depois deste bloco
       start.lastIndex = to
     }
   }
@@ -78,7 +72,7 @@ function inferYear(dia: number, mes: number, vencimento: Date): number {
   return yV
 }
 
-/** Detecta "X/Y" de parcelamento no final da descrição */
+/** Detecta "X/Y" de parcelamento */
 function extractInstallment(desc: string): string {
   const m = desc.match(/\b(\d{1,2})\/(\d{1,2})\b/)
   if (m) {
@@ -93,20 +87,19 @@ function stripInstallment(desc: string): string {
 }
 
 // ============================================================
-// 3. Extração de um bloco
+// 3. Extração — regex com sinal negativo opcional
 // ============================================================
 /**
  * Regex global sobre o bloco:
- *   "DD/MM" + descrição (1-120 chars, lazy) + valor "N,NN"
+ *   "DD/MM" + descrição (1-120 chars, lazy) + valor (com - opcional)
  *
- * O valor é a âncora. Cada match consome até o valor, então a
- * próxima busca começa já depois dele — evita reprocessar trechos.
+ * O valor é a âncora. Cada match consome até o valor.
+ * O sinal negativo é capturado como parte do valor.
  */
-const RE_TX = /(\d{2})\/(\d{2})([\s\S]{1,120}?)(\d{1,3}(?:\.\d{3})*,\d{2})/g
+const RE_TX = /(\d{2})\/(\d{2})([\s\S]{1,120}?)(-?\d{1,3}(?:\.\d{3})*,\d{2})/g
 
 function parseBlock(block: string, vencimento: Date): ParsedTx[] {
   const txs: ParsedTx[] = []
-  const seen = new Set<string>()
 
   RE_TX.lastIndex = 0
   let m: RegExpExecArray | null
@@ -128,14 +121,17 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
     if (desc.length < 2) continue
     if (/^(data|estabelecimento|valor em|total|lan[çc]amento|pr[óo]xima|demais)/i.test(desc)) continue
 
-    // Se a descrição termina com "/" é sinal de que cortamos no meio do
-    // parcelamento — devolve 1 dígito do valor pra descrição
+    // Se termina com "/" é sinal de que cortamos no meio do parcelamento
     if (desc.endsWith('/') && /^\d/.test(rawVal)) {
       desc = desc + rawVal[0]
-      // (não precisa reajustar rawVal, valor é lido logo abaixo)
     }
 
-    const amountBrl = -Math.abs(parseMoney(rawVal))
+    // Valor: o PDF mostra compras como positivas e estornos como negativas.
+    // No banco é o oposto: compras são negativas, estornos positivos.
+    // Então basta NEGAR o valor do PDF.
+    const pdfValue = parseMoney(rawVal)          // ex: 62,00 ou -31,00
+    const amountBrl = -pdfValue                  // ex: -62.00 ou 31.00
+
     const year = inferYear(dia, mes, vencimento)
     const purchase_date = toIso(year, mes, dia)
 
@@ -144,15 +140,11 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
 
     if (cleanDesc.length < 2) continue
 
-    const key = `${purchase_date}|${cleanDesc}|${amountBrl}|${installment}`
-    if (seen.has(key)) continue
-    seen.add(key)
-
     txs.push({
       purchase_date,
       description: cleanDesc,
       amount_brl: amountBrl,
-      category: null, // sem categorização — o preview resolve
+      category: null,
       installment,
     })
   }
@@ -190,18 +182,8 @@ export function parseItauPdf(rawText: string): ParsedInvoice {
 
   // Fatia os blocos e extrai de cada um
   const blocks = sliceBlocks(text)
-  const all: ParsedTx[] = []
-  for (const b of blocks) all.push(...parseBlock(b, vencimento))
-
-  // Deduplica global
-  const seen = new Set<string>()
   const transactions: ParsedTx[] = []
-  for (const t of all) {
-    const key = `${t.purchase_date}|${t.description}|${t.amount_brl}|${t.installment}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    transactions.push(t)
-  }
+  for (const b of blocks) transactions.push(...parseBlock(b, vencimento))
 
   return { payment_date, invoice_month, holder, card_last_four, total, transactions }
 }
