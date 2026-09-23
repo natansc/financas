@@ -13,18 +13,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const [y, m] = month.split('-').map(Number)
   const end = new Date(y, m, 1).toISOString().slice(0, 10)
 
+  // Filtra por payment_date (mês do vencimento)
   const { data, error } = await supabase
     .from('transactions')
-    .select('description, category, amount_brl, purchase_date, installment')
+    .select('description, category, amount_brl, purchase_date, payment_date, installment')
     .eq('account_id', id)
-    .gte('purchase_date', start)
-    .lt('purchase_date', end)
+    .gte('payment_date', start)
+    .lt('payment_date', end)
     .lt('amount_brl', 0)
     .order('amount_brl', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Top estabelecimentos (agrupa por descrição)
   const byDesc: Record<string, { total: number; count: number }> = {}
   ;(data ?? []).forEach(t => {
     const key = t.description

@@ -16,7 +16,7 @@ export type ParsedInvoice = {
 }
 
 // ============================================================
-// 1. BLOCOS
+// 1. Blocos
 // ============================================================
 const BLOCKS: Array<{ start: RegExp; end: RegExp }> = [
   {
@@ -35,7 +35,6 @@ const BLOCKS: Array<{ start: RegExp; end: RegExp }> = [
 
 function sliceBlocks(text: string): string[] {
   const slices: string[] = []
-
   for (const { start, end } of BLOCKS) {
     start.lastIndex = 0
     let mStart: RegExpExecArray | null
@@ -44,12 +43,10 @@ function sliceBlocks(text: string): string[] {
       end.lastIndex = from
       const mEnd = end.exec(text)
       const to = mEnd ? mEnd.index : text.length
-
       if (to - from > 5) slices.push(text.slice(from, to))
       start.lastIndex = to
     }
   }
-
   return slices
 }
 
@@ -85,15 +82,67 @@ function stripInstallment(desc: string): string {
 }
 
 // ============================================================
-// 3. Extração
+// 3. Categoria — do rabo da linha (o próprio Itaú escreve)
+// ============================================================
+function normalize(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Chaves sempre minúsculas sem acento */
+const ITAU_CATS: Record<string, string> = {
+  'outros':         'Outros',
+  'outras':         'Outros',
+  'diversos':       'Outros',
+  'supermercado':   'Supermercado',
+  'supermarket':    'Supermercado',
+  'lazer':          'Lazer',
+  'viagem':         'Viagem',
+  'viaagem':        'Viagem',
+  'hotel':          'Viagem',
+  'turismo':        'Viagem',
+  'veiculos':       'Transporte',
+  'transporte':     'Transporte',
+  'estacionamento': 'Transporte',
+  'saude':          'Saúde',
+  'casa':           'Casa',
+  'educacao':       'Educação',
+  'estudario':      'Educação',
+  'vestuario':      'Vestuário',
+  'servicos':       'Serviços',
+  'restaurante':    'Alimentação',
+  'alimentacao':    'Alimentação',
+  'farmacia':       'Farmácia',
+  'petshop':        'Pet',
+  'pet':            'Pet',
+  'posto':          'Combustível',
+  'combustivel':    'Combustível',
+  'automobile':     'Outros',
+  'hobby':          'Outros',
+}
+
+function extractItauCategory(tail: string): string | null {
+  if (!tail) return null
+  const parts = normalize(tail).split(/\s+/)
+  for (const p of parts) {
+    if (ITAU_CATS[p]) return ITAU_CATS[p]
+  }
+  return null
+}
+
+// ============================================================
+// 4. Extração
 // ============================================================
 /**
- * Regex global sobre o bloco:
- *   "DD/MM" + descrição (1-300 chars, lazy) + valor (com - opcional)
- *
- * Valor é a âncora. Cada match consome até o valor (inclusive).
+ * Regex captura:
+ *   1 = DD | 2 = MM | 3 = descrição | 4 = valor | 5 = rabo (categoria+cidade)
  */
-const RE_TX = /(\d{2})\/(\d{2})([\s\S]{1,300}?)(-?\d{1,3}(?:\.\d{3})*,\d{2})/g
+const RE_TX = /(\d{2})\/(\d{2})([\s\S]{1,300}?)(-?\d{1,3}(?:\.\d{3})*,\d{2})\s*([A-Za-zÀ-ú][A-Za-zÀ-ú\s]{0,60})?/g
 
 function parseBlock(block: string, vencimento: Date): ParsedTx[] {
   const txs: ParsedTx[] = []
@@ -102,13 +151,13 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
   let m: RegExpExecArray | null
 
   while ((m = RE_TX.exec(block)) !== null) {
-    const [, dd, mm, rawDesc, rawVal] = m
+    const [, dd, mm, rawDesc, rawVal, tail] = m
 
     const dia = +dd
     const mes = +mm
     if (dia < 1 || dia > 31 || mes < 1 || mes > 12) continue
 
-    // Limpa a descrição
+    // Limpa descrição
     let desc = rawDesc
       .replace(/^(DATA|ESTABELECIMENTO|VALOR EM R\$)\s*/gi, '')
       .replace(/^[:\-–\s]+/, '')
@@ -118,13 +167,13 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
     if (desc.length < 2) continue
     if (/^(data|estabelecimento|valor em|total|lan[çc]amento|pr[óo]xima|demais)/i.test(desc)) continue
 
-    // Se termina com "/" é sinal de que cortamos no meio do parcelamento
+    // Se termina com "/" cortamos no meio do parcelamento
     if (desc.endsWith('/') && /^\d/.test(rawVal)) {
       desc = desc + rawVal[0]
     }
 
-    // Sinal: o PDF mostra compras como positivas e estornos como negativas.
-    // No banco é o oposto → negamos o valor.
+    // Valor: PDF usa positivo pra compras, negativo pra estornos.
+    // Banco: nega o valor.
     const pdfValue = parseMoney(rawVal)
     const amountBrl = -pdfValue
 
@@ -136,11 +185,14 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
 
     if (cleanDesc.length < 2) continue
 
+    // Categoria do rabo
+    const category = extractItauCategory(tail || '')
+
     txs.push({
       purchase_date,
       description: cleanDesc,
       amount_brl: amountBrl,
-      category: null,
+      category,
       installment,
     })
   }
@@ -149,7 +201,7 @@ function parseBlock(block: string, vencimento: Date): ParsedTx[] {
 }
 
 // ============================================================
-// 4. Header do PDF
+// 5. Header do PDF
 // ============================================================
 const RE_VENC  = /(?:Com vencimento em|Vencimento)\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i
 const RE_HOLD  = /Titular\s+([A-ZÀ-Ú][A-ZÀ-Ú\s]+?)\s+Cart/i
@@ -157,7 +209,7 @@ const RE_CARD  = /Cart[ãa]o\s+([\d.X]+)/i
 const RE_TOTAL = /total da sua fatura é:\s*R\$\s*([\d.,]+)/i
 
 // ============================================================
-// 5. Função principal
+// 6. Função principal
 // ============================================================
 export function parseItauPdf(rawText: string): ParsedInvoice {
   const text = rawText.normalize('NFC')
