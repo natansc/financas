@@ -1,14 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Upload, List, Wallet, Tag } from 'lucide-react'
+import { Home, Upload, List, Wallet, CreditCard } from 'lucide-react'
 
 const items = [
   { href: '/', label: 'Início', icon: Home },
   { href: '/transactions', label: 'Lançar', icon: List },
+  { href: '/cards', label: 'Cartões', icon: CreditCard },
   { href: '/import', label: 'Importar', icon: Upload },
   { href: '/accounts', label: 'Contas', icon: Wallet },
-  { href: '/categories', label: 'Categorias', icon: Tag },
 ]
 
 export default function BottomNav() {

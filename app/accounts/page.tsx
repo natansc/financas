@@ -20,6 +20,7 @@ const emptyForm = {
   holder: '',
   last_four: '',
   color: COLORS[0],
+  limit_brl: '',
 }
 
 export default function AccountsPage() {
@@ -45,11 +46,15 @@ export default function AccountsPage() {
     setSaving(true)
 
     const payload: any = {
-      name: form.name,
-      type: form.type,
-      color: form.color,
-      holder: isCard ? (form.holder || null) : null,
-      last_four: isCard ? (form.last_four || null) : null,
+    name: form.name,
+    type: form.type,
+    color: form.color,
+    holder: isCard ? (form.holder || null) : null,
+    last_four: isCard ? (form.last_four || null) : null,
+    limit_brl: isCard && form.limit_brl
+      ? parseFloat(String(form.limit_brl).replace(/\./g, '').replace(',', '.'))
+      : 0,
+
     }
 
     if (isEdit) {
@@ -132,6 +137,17 @@ export default function AccountsPage() {
                   placeholder="Ex: 2094"
                   value={form.last_four}
                   onChange={e => setForm({ ...form, last_four: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 text-base"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600">Limite de crédito (R$)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Ex: 15000"
+                  value={form.limit_brl}
+                  onChange={e => setForm({ ...form, limit_brl: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2 text-base"
                 />
               </label>
