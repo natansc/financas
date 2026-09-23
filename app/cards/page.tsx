@@ -66,9 +66,23 @@ export default function CardsPage() {
               </div>
 
               <div className="flex items-baseline justify-between mb-2">
-                <span className="text-xl font-bold text-red-600">
-                  {fmtBRL(c.current_total)}
-                </span>
+                <div className="flex items-baseline justify-between mb-2">
+                    <div>
+                        <span className="text-xl font-bold text-red-600">
+                        {fmtBRL(c.current_total)}
+                        </span>
+                        {c.current_month && (
+                        <span className="text-xs text-gray-400 ml-2">
+                            em {monthLabel(c.current_month)}
+                        </span>
+                        )}
+                    </div>
+                    {c.variation_pct !== 0 && (
+                        <span className={`text-xs font-medium ${c.variation_pct > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                        {c.variation_pct > 0 ? '↑' : '↓'} {Math.abs(c.variation_pct).toFixed(0)}%
+                        </span>
+                    )}
+                    </div>
                 {c.variation_pct !== 0 && (
                   <span className={`text-xs font-medium ${c.variation_pct > 0 ? 'text-red-500' : 'text-green-600'}`}>
                     {c.variation_pct > 0 ? '↑' : '↓'} {Math.abs(c.variation_pct).toFixed(0)}% vs mês anterior

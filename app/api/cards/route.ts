@@ -8,7 +8,6 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const months = parseInt(searchParams.get('months') || '6', 10)
 
-  // Lista contas de cartão
   const { data: accounts, error: errAcc } = await supabase
     .from('accounts')
     .select('*')
@@ -16,7 +15,6 @@ export async function GET(req: Request) {
     .order('name')
   if (errAcc) return NextResponse.json({ error: errAcc.message }, { status: 500 })
 
-  // Pega transações dos últimos N meses
   const since = new Date()
   since.setMonth(since.getMonth() - (months - 1))
   since.setDate(1)
@@ -26,11 +24,11 @@ export async function GET(req: Request) {
     .select('account_id, purchase_date, amount_brl, category')
     .in('account_id', accounts?.map(a => a.id) || [])
     .gte('purchase_date', since.toISOString().slice(0, 10))
-    .lt('amount_brl', 0) // só despesas
+    .lt('amount_brl', 0)
 
   if (errTx) return NextResponse.json({ error: errTx.message }, { status: 500 })
 
-  // Monta meses (últimos N)
+  // Lista dos meses no range (ordem cronológica)
   const monthKeys: string[] = []
   const d = new Date()
   d.setDate(1)
@@ -40,12 +38,9 @@ export async function GET(req: Request) {
     monthKeys.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`)
   }
 
-  const currentMonth = monthKeys[monthKeys.length - 1]
-
   const cards = (accounts ?? []).map(acc => {
     const accTxs = (txs ?? []).filter(t => t.account_id === acc.id)
 
-    // Evolução mensal
     const monthly = monthKeys.map(m => {
       const total = accTxs
         .filter(t => t.purchase_date.startsWith(m))
@@ -53,17 +48,25 @@ export async function GET(req: Request) {
       return { month: m, total: Number(total.toFixed(2)) }
     })
 
-    const currentTotal = monthly[monthly.length - 1].total
-    const prevTotal = monthly[monthly.length - 2]?.total || 0
+    // Descobre o mês mais recente COM dados nesse cartão
+    const monthsWithData = monthly.filter(m => m.total > 0)
+    const lastMonthWithData = monthsWithData[monthsWithData.length - 1] || null
+    const prevMonthWithData = monthsWithData[monthsWithData.length - 2] || null
 
-    // Top categorias (mês atual)
+    const currentMonth = lastMonthWithData?.month || null
+    const currentTotal = lastMonthWithData?.total || 0
+    const prevTotal = prevMonthWithData?.total || 0
+
+    // Top categorias do último mês com dados
     const catTotals: Record<string, number> = {}
-    accTxs
-      .filter(t => t.purchase_date.startsWith(currentMonth))
-      .forEach(t => {
-        const c = t.category || 'Sem categoria'
-        catTotals[c] = (catTotals[c] || 0) + Math.abs(t.amount_brl)
-      })
+    if (currentMonth) {
+      accTxs
+        .filter(t => t.purchase_date.startsWith(currentMonth))
+        .forEach(t => {
+          const c = t.category || 'Sem categoria'
+          catTotals[c] = (catTotals[c] || 0) + Math.abs(t.amount_brl)
+        })
+    }
     const topCategories = Object.entries(catTotals)
       .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value)
@@ -78,6 +81,7 @@ export async function GET(req: Request) {
       color: acc.color || '#3b82f6',
       last_four: acc.last_four,
       limit_brl: limit,
+      current_month: currentMonth,
       current_total: currentTotal,
       prev_total: prevTotal,
       variation_pct: prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0,
@@ -87,5 +91,12 @@ export async function GET(req: Request) {
     }
   })
 
-  return NextResponse.json({ cards, current_month: currentMonth })
+  // Último mês global (pra usar de default nos detalhes)
+  const allMonthsWithData = cards
+    .map(c => c.current_month)
+    .filter(Boolean)
+    .sort()
+  const globalCurrentMonth = allMonthsWithData[allMonthsWithData.length - 1] || new Date().toISOString().slice(0, 7)
+
+  return NextResponse.json({ cards, current_month: globalCurrentMonth })
 }
