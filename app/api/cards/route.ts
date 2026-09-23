@@ -8,6 +8,11 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const months = parseInt(searchParams.get('months') || '6', 10)
 
+  // Mês selecionado (default = mês atual)
+  const now = new Date()
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const selectedMonth = searchParams.get('month') || defaultMonth
+
   const { data: accounts, error: errAcc } = await supabase
     .from('accounts')
     .select('*')
@@ -28,7 +33,7 @@ export async function GET(req: Request) {
 
   if (errTx) return NextResponse.json({ error: errTx.message }, { status: 500 })
 
-  // Lista dos meses no range (ordem cronológica)
+  // Meses da linha do tempo (cronológico)
   const monthKeys: string[] = []
   const d = new Date()
   d.setDate(1)
@@ -48,32 +53,26 @@ export async function GET(req: Request) {
       return { month: m, total: Number(total.toFixed(2)) }
     })
 
-    // Descobre o mês mais recente COM dados nesse cartão
-    const monthsWithData = monthly.filter(m => m.total > 0)
-    const lastMonthWithData = monthsWithData[monthsWithData.length - 1] || null
-    const prevMonthWithData = monthsWithData[monthsWithData.length - 2] || null
+    // Total do mês selecionado
+    const selectedIdx = monthKeys.indexOf(selectedMonth)
+    const selectedTotal = selectedIdx >= 0 ? monthly[selectedIdx].total : 0
+    const prevTotal = selectedIdx > 0 ? monthly[selectedIdx - 1].total : 0
 
-    const currentMonth = lastMonthWithData?.month || null
-    const currentTotal = lastMonthWithData?.total || 0
-    const prevTotal = prevMonthWithData?.total || 0
-
-    // Top categorias do último mês com dados
+    // Top categorias do mês selecionado
     const catTotals: Record<string, number> = {}
-    if (currentMonth) {
-      accTxs
-        .filter(t => t.purchase_date.startsWith(currentMonth))
-        .forEach(t => {
-          const c = t.category || 'Sem categoria'
-          catTotals[c] = (catTotals[c] || 0) + Math.abs(t.amount_brl)
-        })
-    }
+    accTxs
+      .filter(t => t.purchase_date.startsWith(selectedMonth))
+      .forEach(t => {
+        const c = t.category || 'Sem categoria'
+        catTotals[c] = (catTotals[c] || 0) + Math.abs(t.amount_brl)
+      })
     const topCategories = Object.entries(catTotals)
       .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6)
 
     const limit = Number(acc.limit_brl || 0)
-    const usedPct = limit > 0 ? (currentTotal / limit) * 100 : 0
+    const usedPct = limit > 0 ? (selectedTotal / limit) * 100 : 0
 
     return {
       id: acc.id,
@@ -81,22 +80,22 @@ export async function GET(req: Request) {
       color: acc.color || '#3b82f6',
       last_four: acc.last_four,
       limit_brl: limit,
-      current_month: currentMonth,
-      current_total: currentTotal,
+      current_total: selectedTotal,
       prev_total: prevTotal,
-      variation_pct: prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0,
+      variation_pct: prevTotal > 0 ? ((selectedTotal - prevTotal) / prevTotal) * 100 : 0,
       limit_used_pct: usedPct,
       monthly,
       top_categories: topCategories,
     }
   })
 
-  // Último mês global (pra usar de default nos detalhes)
-  const allMonthsWithData = cards
-    .map(c => c.current_month)
-    .filter(Boolean)
-    .sort()
-  const globalCurrentMonth = allMonthsWithData[allMonthsWithData.length - 1] || new Date().toISOString().slice(0, 7)
+  // Meses disponíveis pra dropdown (só onde tem algum lançamento em algum cartão)
+  const monthsWithData = new Set<string>()
+  ;(txs ?? []).forEach(t => monthsWithData.add(t.purchase_date.slice(0, 7)))
 
-  return NextResponse.json({ cards, current_month: globalCurrentMonth })
+  return NextResponse.json({
+    cards,
+    selected_month: selectedMonth,
+    months_with_data: Array.from(monthsWithData).sort().reverse(),
+  })
 }

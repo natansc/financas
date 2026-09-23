@@ -18,38 +18,71 @@ function monthLabel(ym: string) {
   return `${names[parseInt(m) - 1]}/${y.slice(2)}`
 }
 
+function monthFull(ym: string) {
+  const [y, m] = ym.split('-')
+  const names = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+  return `${names[parseInt(m) - 1]} ${y}`
+}
+
 export default function CardsPage() {
   const [data, setData] = useState<any>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [details, setDetails] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    api.get('/api/cards?months=6').then(d => {
+  const now = new Date()
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const [month, setMonth] = useState(defaultMonth)
+
+  const load = () => {
+    setLoading(true)
+    api.get(`/api/cards?months=6&month=${month}`).then(d => {
       setData(d)
       setLoading(false)
     })
-  }, [])
+  }
+
+  useEffect(() => { load() }, [month])
 
   useEffect(() => {
     if (!selected || !data) return
-    api.get(`/api/cards/${selected}?month=${data.current_month}`).then(setDetails)
+    api.get(`/api/cards/${selected}?month=${data.selected_month}`).then(setDetails)
   }, [selected, data])
 
-  if (loading) return <p className="text-sm text-gray-500 p-4">Carregando...</p>
-  if (!data) return <p className="text-sm text-red-500 p-4">Erro ao carregar</p>
-
-  const cards = data.cards || []
-  const currentCard = cards.find((c: any) => c.id === selected)
+  const currentCard = data?.cards?.find((c: any) => c.id === selected)
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Cartões</h1>
 
+      {/* Seletor de mês */}
+      <div className="bg-white p-3 rounded-xl shadow-sm flex items-center gap-2">
+        <label className="flex-1">
+          <span className="block text-xs font-medium text-gray-500 mb-1">Mês</span>
+          <input
+            type="month"
+            value={month}
+            onChange={e => setMonth(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-base"
+          />
+        </label>
+        {data?.months_with_data?.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMonth(data.months_with_data[0])}
+            className="text-xs text-blue-600 mt-5 whitespace-nowrap"
+          >
+            Ir p/ último<br />com dados
+          </button>
+        )}
+      </div>
+
+      {loading && <p className="text-sm text-gray-500">Carregando...</p>}
+
       {/* Lista de cartões */}
-      {!selected && (
+      {!loading && data && !selected && (
         <div className="space-y-3">
-          {cards.map((c: any) => (
+          {data.cards.map((c: any) => (
             <button
               key={c.id}
               onClick={() => setSelected(c.id)}
@@ -66,23 +99,9 @@ export default function CardsPage() {
               </div>
 
               <div className="flex items-baseline justify-between mb-2">
-                <div className="flex items-baseline justify-between mb-2">
-                    <div>
-                        <span className="text-xl font-bold text-red-600">
-                        {fmtBRL(c.current_total)}
-                        </span>
-                        {c.current_month && (
-                        <span className="text-xs text-gray-400 ml-2">
-                            em {monthLabel(c.current_month)}
-                        </span>
-                        )}
-                    </div>
-                    {c.variation_pct !== 0 && (
-                        <span className={`text-xs font-medium ${c.variation_pct > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                        {c.variation_pct > 0 ? '↑' : '↓'} {Math.abs(c.variation_pct).toFixed(0)}%
-                        </span>
-                    )}
-                    </div>
+                <span className="text-xl font-bold text-red-600">
+                  {fmtBRL(c.current_total)}
+                </span>
                 {c.variation_pct !== 0 && (
                   <span className={`text-xs font-medium ${c.variation_pct > 0 ? 'text-red-500' : 'text-green-600'}`}>
                     {c.variation_pct > 0 ? '↑' : '↓'} {Math.abs(c.variation_pct).toFixed(0)}% vs mês anterior
@@ -108,7 +127,7 @@ export default function CardsPage() {
               )}
             </button>
           ))}
-          {!cards.length && (
+          {!data.cards.length && (
             <p className="text-sm text-gray-500 text-center py-8">
               Nenhum cartão cadastrado. Vá em <b>Contas</b> e marque um como tipo "Cartão de crédito".
             </p>
@@ -131,12 +150,15 @@ export default function CardsPage() {
               <span className="w-3 h-3 rounded-full" style={{ background: currentCard.color }} />
               <span className="font-semibold">{currentCard.name}</span>
             </div>
-            <p className="text-2xl font-bold text-red-600 mb-1">{fmtBRL(currentCard.current_total)}</p>
-            {currentCard.limit_brl > 0 && (
-              <p className="text-xs text-gray-500">
-                Limite disponível: {fmtBRL(currentCard.limit_brl - currentCard.current_total)}
-              </p>
-            )}
+            <p className="text-2xl font-bold text-red-600 mb-1">
+              {fmtBRL(currentCard.current_total)}
+            </p>
+            <p className="text-xs text-gray-500">
+              {monthFull(data.selected_month)}
+              {currentCard.limit_brl > 0 && (
+                <> • Limite disponível: {fmtBRL(currentCard.limit_brl - currentCard.current_total)}</>
+              )}
+            </p>
           </div>
 
           {/* Evolução mensal */}
@@ -167,7 +189,9 @@ export default function CardsPage() {
           {/* Top categorias */}
           {currentCard.top_categories.length > 0 && (
             <div className="bg-white p-4 rounded-xl shadow-sm">
-              <h2 className="text-sm font-semibold mb-3">Gastos por categoria esse mês</h2>
+              <h2 className="text-sm font-semibold mb-3">
+                Gastos por categoria • {monthLabel(data.selected_month)}
+              </h2>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -183,7 +207,7 @@ export default function CardsPage() {
                       tick={{ fontSize: 11 }}
                       tickFormatter={(v: string) => v.length > 16 ? v.slice(0, 15) + '…' : v}
                     />
-                  <Tooltip formatter={(v) => fmtBRL(Number(v))} />
+                    <Tooltip formatter={(v) => fmtBRL(Number(v))} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                       {currentCard.top_categories.map((_: any, i: number) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -198,7 +222,9 @@ export default function CardsPage() {
           {/* Top estabelecimentos */}
           {details?.top_stores?.length > 0 && (
             <div className="bg-white p-4 rounded-xl shadow-sm">
-              <h2 className="text-sm font-semibold mb-3">Top estabelecimentos do mês</h2>
+              <h2 className="text-sm font-semibold mb-3">
+                Top estabelecimentos • {monthLabel(data.selected_month)}
+              </h2>
               <ul className="space-y-2">
                 {details.top_stores.map((s: any, i: number) => (
                   <li key={i} className="flex justify-between text-sm border-b border-gray-50 pb-2 last:border-0">
