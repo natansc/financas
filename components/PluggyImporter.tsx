@@ -291,15 +291,22 @@ export default function PluggyImporter() {
     setMessage(null)
     let imported = 0
     let duplicates = 0
+    const failures: string[] = []
     try {
       for (const account of linkedAccounts) {
         const response = await api.post('/api/pluggy/sync', {
           pluggy_account_id: account.id,
           ...period,
         })
-        if (response?.error) throw new Error(`${account.name}: ${response.error}`)
+        if (response?.error) {
+          failures.push(`${account.name}: ${response.error}`)
+          continue
+        }
         imported += response.imported ?? 0
         duplicates += response.duplicates ?? 0
+      }
+      if (failures.length) {
+        setError(`Falha em ${failures.length} de ${linkedAccounts.length} contas: ${failures.join('; ')}`)
       }
       setMessage(`${imported} novas, ${duplicates} já existentes em ${linkedAccounts.length} contas`)
     } catch (cause) {
@@ -423,8 +430,24 @@ export default function PluggyImporter() {
           includeSandbox={process.env.NODE_ENV !== 'production'}
           selectedConnectorId={selectedConnectorId}
           onSuccess={({ item }) => { void saveConnection(item.id) }}
-          onError={({ message: widgetError }) => {
-            setError(widgetError || 'A conexão não foi concluída')
+          onError={async widgetError => {
+            const errorData = widgetError as typeof widgetError & {
+              data?: typeof widgetError.data & { items?: string[] }
+              items?: string[]
+            }
+            const duplicate = /ITEM_USER_ALREADY_EXISTS/i.test(widgetError.message)
+            const existingItemId = errorData.data?.items?.[0]
+              ?? errorData.data?.item?.id
+              ?? errorData.items?.[0]
+
+            if (duplicate && existingItemId) {
+              await saveConnection(existingItemId)
+              return
+            }
+
+            setError(duplicate
+              ? 'Essa conexão já existe na Pluggy, mas o widget não retornou o ID dela. Expanda “Importar conexão pelo ID do item” ou use “Importar conexões existentes” quando a listagem estiver habilitada.'
+              : widgetError.message || 'A conexão não foi concluída')
             setConnectToken(null)
             setSelectedConnectorId(undefined)
           }}

@@ -6,11 +6,16 @@ export async function GET(req: Request) {
   const supabase = getSupabaseAdmin()
 
   const { searchParams } = new URL(req.url)
-  const months = parseInt(searchParams.get('months') || '6', 10)
+  const requestedMonths = parseInt(searchParams.get('months') || '6', 10)
+  const months = Number.isFinite(requestedMonths) && requestedMonths > 0 ? requestedMonths : 6
 
   const now = new Date()
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const selectedMonth = searchParams.get('month') || defaultMonth
+  const match = selectedMonth.match(/^(\d{4})-(0[1-9]|1[0-2])$/)
+  if (!match) return NextResponse.json({ error: 'month deve estar no formato AAAA-MM' }, { status: 400 })
+  const selectedYear = Number(match[1])
+  const selectedMonthNumber = Number(match[2])
 
   const { data: accounts, error: errAcc } = await supabase
     .from('accounts')
@@ -19,11 +24,11 @@ export async function GET(req: Request) {
     .order('name')
   if (errAcc) return NextResponse.json({ error: errAcc.message }, { status: 500 })
 
-  // since = 1º dia do mês mais antigo do range
-  const since = new Date()
-  since.setDate(1)
-  since.setMonth(since.getMonth() - (months - 1))
+  // Load the six-month window ending at the month selected in the UI.
+  const since = new Date(Date.UTC(selectedYear, selectedMonthNumber - months, 1))
+  const until = new Date(Date.UTC(selectedYear, selectedMonthNumber, 1))
   const sinceIso = since.toISOString().slice(0, 10)
+  const untilIso = until.toISOString().slice(0, 10)
 
   // Busca transações pela payment_date (cartão é sempre no vencimento)
   const { data: txs, error: errTx } = await supabase
@@ -31,17 +36,15 @@ export async function GET(req: Request) {
     .select('account_id, payment_date, purchase_date, amount_brl, category')
     .in('account_id', accounts?.map(a => a.id) || [])
     .gte('payment_date', sinceIso)
+    .lt('payment_date', untilIso)
     .lt('amount_brl', 0)
 
   if (errTx) return NextResponse.json({ error: errTx.message }, { status: 500 })
 
   // Meses do range (cronológico)
   const monthKeys: string[] = []
-  const d = new Date()
-  d.setDate(1)
   for (let i = months - 1; i >= 0; i--) {
-    const m = new Date(d)
-    m.setMonth(m.getMonth() - i)
+    const m = new Date(Date.UTC(selectedYear, selectedMonthNumber - 1 - i, 1))
     monthKeys.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`)
   }
 
