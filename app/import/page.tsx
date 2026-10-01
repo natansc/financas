@@ -2,9 +2,10 @@
 import { useState } from 'react'
 import CsvImporter from '@/components/CsvImporter'
 import PdfImporter from '@/components/PdfImporter'
+import PluggyImporter from '@/components/PluggyImporter'
 
 export default function ImportPage() {
-  const [tab, setTab] = useState<'csv' | 'pdf'>('pdf')
+  const [tab, setTab] = useState<'csv' | 'pdf' | 'pluggy'>('pdf')
 
   return (
     <div className="space-y-4">
@@ -23,9 +24,15 @@ export default function ImportPage() {
         >
           CSV
         </button>
+        <button
+          onClick={() => setTab('pluggy')}
+          className={`flex-1 py-2 rounded-md text-sm font-medium ${tab === 'pluggy' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
+        >
+          Pluggy
+        </button>
       </div>
 
-      {tab === 'pdf' ? <PdfImporter /> : <CsvImporter />}
+      {tab === 'pdf' ? <PdfImporter /> : tab === 'csv' ? <CsvImporter /> : <PluggyImporter />}
     </div>
   )
 }

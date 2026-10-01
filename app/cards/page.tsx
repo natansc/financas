@@ -29,17 +29,26 @@ export default function CardsPage() {
   const [selected, setSelected] = useState<string | null>(null)
   const [details, setDetails] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const now = new Date()
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const [month, setMonth] = useState(defaultMonth)
 
-  const load = () => {
+  const load = async () => {
     setLoading(true)
-    api.get(`/api/cards?months=6&month=${month}`).then(d => {
+    setLoadError(null)
+    try {
+      const d = await api.get(`/api/cards?months=6&month=${month}`)
+      if (d?.error) throw new Error(String(d.error))
+      if (!Array.isArray(d?.cards)) throw new Error('Resposta inválida ao carregar cartões')
       setData(d)
+    } catch (error) {
+      setData(null)
+      setLoadError(error instanceof Error ? error.message : 'Não foi possível carregar os cartões')
+    } finally {
       setLoading(false)
-    })
+    }
   }
 
   useEffect(() => { load() }, [month])
@@ -78,6 +87,11 @@ export default function CardsPage() {
       </div>
 
       {loading && <p className="text-sm text-gray-500">Carregando...</p>}
+      {!loading && loadError && (
+        <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          Não foi possível carregar os cartões: {loadError}
+        </p>
+      )}
 
       {/* Lista de cartões */}
       {!loading && data && !selected && (
