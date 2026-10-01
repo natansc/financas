@@ -89,6 +89,7 @@ export default function PluggyImporter() {
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null)
   const [syncingAll, setSyncingAll] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const applyState = (data: PluggyState) => {
@@ -168,9 +169,14 @@ export default function PluggyImporter() {
     setImportingExisting(true)
     setError(null)
     setMessage(null)
+    setNotice(null)
     try {
       const response = await api.post('/api/pluggy/import-existing', {})
       if (response?.error) {
+        if (response.hint?.includes('GET /v2/items')) {
+          setNotice('A Pluggy bloqueia a listagem automática geral. As contas que já aparecem abaixo continuam importáveis por conta ou pelo botão Importar todas.')
+          return
+        }
         throw new Error(`${response.error}${response.hint ? ` ${response.hint}` : ''}`)
       }
       setMessage(
@@ -459,6 +465,7 @@ export default function PluggyImporter() {
       )}
 
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {notice && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">{notice}</p>}
       {message && <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-700">{message}</p>}
 
       <details className="rounded-lg border border-gray-200 bg-white p-3">
