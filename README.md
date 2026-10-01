@@ -52,7 +52,7 @@ A listagem geral de conexões usa `GET /v2/items`, que precisa estar habilitado 
 
 Para dúvidas sobre uso pessoal, o guia indica a [comunidade do Meu Pluggy no Discord](https://discord.com/invite/EanrwJADby). O `itemId` de uma conexão pode ser importado manualmente se necessário.
 
-A primeira sincronização importa o histórico disponível; as seguintes consultam os últimos 30 dias para capturar atualizações. O identificador original da Pluggy tem índice único no banco, então repetir a importação não cria lançamentos duplicados. Movimentações não efetivadas e contas em moeda diferente de BRL são ignoradas. Para cartões, os lançamentos são associados ao vencimento da fatura quando esses dados estão disponíveis.
+Em **Período das movimentações**, selecione o mês inicial e final. Para importar todo 2025, escolha janeiro/2025 a dezembro/2025; o intervalo vale tanto para extrato bancário quanto para cartões. Débitos são salvos como despesas e créditos como receitas. O identificador original da Pluggy tem índice único no banco, então repetir a importação não duplica lançamentos. Movimentações não efetivadas e contas em moeda diferente de BRL são ignoradas. Para cartões, os lançamentos são associados ao vencimento da fatura quando esses dados estão disponíveis. O histórico importável depende do que a Pluggy disponibiliza para cada instituição/conexão.
 
 Use os conectores Sandbox da Pluggy em desenvolvimento para validar o fluxo antes de conectar uma instituição real.
 

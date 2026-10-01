@@ -21,9 +21,23 @@ export async function POST(req: Request) {
   if (!checkToken(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   try {
-    const { pluggy_account_id } = await req.json()
+    const { pluggy_account_id, date_from, date_to } = await req.json()
     if (typeof pluggy_account_id !== 'string' || !pluggy_account_id) {
       return NextResponse.json({ error: 'pluggy_account_id obrigatório' }, { status: 400 })
+    }
+    if (Boolean(date_from) !== Boolean(date_to)) {
+      return NextResponse.json({ error: 'Informe o início e o fim do período' }, { status: 400 })
+    }
+    if (date_from && date_to) {
+      const isoDate = /^\d{4}-\d{2}-\d{2}$/
+      if (!isoDate.test(date_from) || !isoDate.test(date_to)
+        || Number.isNaN(Date.parse(`${date_from}T00:00:00Z`))
+        || Number.isNaN(Date.parse(`${date_to}T00:00:00Z`))) {
+        return NextResponse.json({ error: 'Período inválido; use datas no formato AAAA-MM-DD' }, { status: 400 })
+      }
+      if (date_from > date_to) {
+        return NextResponse.json({ error: 'A data inicial precisa ser anterior ou igual à final' }, { status: 400 })
+      }
     }
 
     const supabase = getSupabaseAdmin()
@@ -60,7 +74,8 @@ export async function POST(req: Request) {
 
     const transactions = await listPluggyTransactions(
       pluggy_account_id,
-      syncStartDate(link.last_synced_at)
+      date_from || syncStartDate(link.last_synced_at),
+      date_to || undefined
     )
     const bills = pluggyAccount.type === 'CREDIT'
       ? await listPluggyBills(pluggy_account_id).catch(() => [])

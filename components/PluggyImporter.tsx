@@ -71,6 +71,7 @@ function getApiErrorMessage(error: unknown): string {
 }
 
 export default function PluggyImporter() {
+  const currentMonth = new Date().toISOString().slice(0, 7)
   const [PluggyConnectComponent, setPluggyConnectComponent] = useState<((props: PluggyConnectProps) => React.JSX.Element) | null>(null)
   const [connections, setConnections] = useState<PluggyConnection[]>([])
   const [localAccounts, setLocalAccounts] = useState<LocalAccount[]>([])
@@ -78,6 +79,8 @@ export default function PluggyImporter() {
   const [connectToken, setConnectToken] = useState<string | null>(null)
   const [selectedConnectorId, setSelectedConnectorId] = useState<number | undefined>()
   const [existingItemId, setExistingItemId] = useState('')
+  const [fromMonth, setFromMonth] = useState(`${currentMonth.slice(0, 4)}-01`)
+  const [toMonth, setToMonth] = useState(currentMonth)
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState(false)
   const [importingExisting, setImportingExisting] = useState(false)
@@ -249,11 +252,17 @@ export default function PluggyImporter() {
   }
 
   const syncAccount = async (pluggyAccountId: string) => {
+    const period = getSelectedPeriod()
+    if (!period) return
+
     setSyncingAccountId(pluggyAccountId)
     setError(null)
     setMessage(null)
     try {
-      const response = await api.post('/api/pluggy/sync', { pluggy_account_id: pluggyAccountId })
+      const response = await api.post('/api/pluggy/sync', {
+        pluggy_account_id: pluggyAccountId,
+        ...period,
+      })
       if (response?.error) throw new Error(response.error)
       const result = response as SyncResult
       const skipped = result.ignored_pending + result.ignored_foreign_currency
@@ -269,6 +278,9 @@ export default function PluggyImporter() {
   }
 
   const syncAll = async () => {
+    const period = getSelectedPeriod()
+    if (!period) return
+
     const linkedAccounts = connections.flatMap(connection =>
       connection.accounts.filter(account => account.app_account_id)
     )
@@ -281,7 +293,10 @@ export default function PluggyImporter() {
     let duplicates = 0
     try {
       for (const account of linkedAccounts) {
-        const response = await api.post('/api/pluggy/sync', { pluggy_account_id: account.id })
+        const response = await api.post('/api/pluggy/sync', {
+          pluggy_account_id: account.id,
+          ...period,
+        })
         if (response?.error) throw new Error(`${account.name}: ${response.error}`)
         imported += response.imported ?? 0
         duplicates += response.duplicates ?? 0
@@ -298,6 +313,21 @@ export default function PluggyImporter() {
     (total, connection) => total + connection.accounts.filter(account => account.app_account_id).length,
     0
   )
+
+  const getSelectedPeriod = () => {
+    if (!fromMonth || !toMonth) {
+      setError('Selecione o mês inicial e o mês final do período.')
+      return null
+    }
+    if (fromMonth > toMonth) {
+      setError('O mês inicial precisa ser anterior ou igual ao mês final.')
+      return null
+    }
+
+    const [year, month] = toMonth.split('-').map(Number)
+    const lastDay = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)
+    return { date_from: `${fromMonth}-01`, date_to: lastDay }
+  }
 
   return (
     <div className="space-y-4">
@@ -355,6 +385,36 @@ export default function PluggyImporter() {
           Guia oficial
         </a>
       </p>
+
+      <fieldset className="rounded-lg border border-gray-200 bg-white p-3">
+        <legend className="px-1 text-sm font-medium text-gray-700">Período das movimentações</legend>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-xs text-gray-600">
+            De
+            <input
+              type="month"
+              value={fromMonth}
+              max={toMonth || undefined}
+              onChange={event => setFromMonth(event.target.value)}
+              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm text-gray-900"
+            />
+          </label>
+          <label className="text-xs text-gray-600">
+            Até
+            <input
+              type="month"
+              value={toMonth}
+              min={fromMonth || undefined}
+              max={currentMonth}
+              onChange={event => setToMonth(event.target.value)}
+              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm text-gray-900"
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-gray-500">
+          O intervalo inclui extrato bancário e movimentações do cartão. Para o ano todo, escolha janeiro a dezembro.
+        </p>
+      </fieldset>
 
       {connectToken && PluggyConnectComponent && (
         <PluggyConnectComponent
