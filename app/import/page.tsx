@@ -28,7 +28,7 @@ export default function ImportPage() {
           onClick={() => setTab('pluggy')}
           className={`flex-1 py-2 rounded-md text-sm font-medium ${tab === 'pluggy' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
         >
-          Pluggy
+          Bancos
         </button>
       </div>
 

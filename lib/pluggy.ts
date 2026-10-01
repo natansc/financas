@@ -13,10 +13,13 @@ export async function getPluggyApiKey(): Promise<string> {
   const clientId = process.env.PLUGGY_CLIENT_ID
   const clientSecret = process.env.PLUGGY_CLIENT_SECRET
 
-  if (!clientId || !clientSecret) {
-    throw new Error(
-      'Env vars ausentes: PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET'
-    )
+  const missingVariables = [
+    !clientId && 'PLUGGY_CLIENT_ID',
+    !clientSecret && 'PLUGGY_CLIENT_SECRET',
+  ].filter(Boolean)
+
+  if (missingVariables.length) {
+    throw new Error(`Variável ausente no ambiente deste deploy: ${missingVariables.join(', ')}`)
   }
 
   const res = await fetch(`${PLUGGY_API}/auth`, {
