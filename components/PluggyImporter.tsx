@@ -77,7 +77,6 @@ export default function PluggyImporter() {
   const [localAccounts, setLocalAccounts] = useState<LocalAccount[]>([])
   const [selectedAccounts, setSelectedAccounts] = useState<Record<string, string>>({})
   const [connectToken, setConnectToken] = useState<string | null>(null)
-  const [selectedConnectorId, setSelectedConnectorId] = useState<number | undefined>()
   const [existingItemId, setExistingItemId] = useState('')
   const [fromMonth, setFromMonth] = useState(`${currentMonth.slice(0, 4)}-01`)
   const [toMonth, setToMonth] = useState(currentMonth)
@@ -149,11 +148,10 @@ export default function PluggyImporter() {
     return () => { active = false }
   }, [])
 
-  const startConnection = async (connectorId?: number) => {
+  const startConnection = async () => {
     setConnecting(true)
     setError(null)
     setMessage(null)
-    setSelectedConnectorId(connectorId)
     try {
       const response = await api.post('/api/pluggy/connect-token', {})
       if (response?.error) throw new Error(response.error)
@@ -227,7 +225,6 @@ export default function PluggyImporter() {
       setError(cause instanceof Error ? cause.message : 'Não foi possível salvar a conexão')
     } finally {
       setConnectToken(null)
-      setSelectedConnectorId(undefined)
     }
   }
 
@@ -370,38 +367,21 @@ export default function PluggyImporter() {
           </button>
           <button
             type="button"
-            onClick={() => void startConnection(200)}
+            onClick={() => void startConnection()}
             disabled={connecting}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             <Link2 size={16} />
-            {connecting ? 'Preparando...' : 'Conectar via Meu Pluggy'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void startConnection()}
-            disabled={connecting}
-            className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 disabled:opacity-50"
-          >
-            Pluggy Bank
-          </button>
-          <button
-            type="button"
-            onClick={() => void startConnection()}
-            disabled={connecting}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
-          >
-            Outro banco
+            {connecting ? 'Preparando...' : 'Nova conexão'}
           </button>
         </div>
       </div>
 
       <p className="text-xs text-gray-600">
-        Para usar conexões pessoais existentes, conecte seus bancos no{' '}
+        Para usar bancos já conectados no{' '}
         <a href="https://meu.pluggy.ai/" target="_blank" rel="noreferrer" className="font-medium text-blue-700 underline">
           Meu Pluggy
-        </a>{' '}
-        e depois use o botão Meu Pluggy acima. O botão Pluggy Bank abre o seletor da Pluggy; escolha esse conector na lista.{' '}
+        </a>, clique em Nova conexão e escolha o conector MeuPluggy na lista para vincular os bancos da sua conta. Não escolha Pluggy Bank nem Sandbox: são conectores de teste. Para conectar um banco diretamente, escolha o próprio banco na lista.{' '}
         <a href="https://meu.pluggy.ai/api-guide" target="_blank" rel="noreferrer" className="text-blue-700 underline">
           Guia oficial
         </a>
@@ -442,7 +422,6 @@ export default function PluggyImporter() {
           connectToken={connectToken}
           language="pt"
           includeSandbox={process.env.NODE_ENV !== 'production'}
-          selectedConnectorId={selectedConnectorId}
           onSuccess={({ item }) => { void saveConnection(item.id) }}
           onError={async widgetError => {
             const errorData = widgetError as typeof widgetError & {
@@ -460,14 +439,12 @@ export default function PluggyImporter() {
             }
 
             setError(duplicate
-              ? 'Essa conexão já existe na Pluggy, mas o widget não retornou o ID dela. Expanda “Importar conexão pelo ID do item” ou use “Importar conexões existentes” quando a listagem estiver habilitada.'
+              ? 'A Pluggy informou que essa conexão já existe, mas não retornou o ID do item. Como a listagem GET /v2/items está bloqueada para estas credenciais, o app não consegue recuperá-lo. Não tente conectar repetidamente; peça à Pluggy para habilitar esse endpoint.'
               : widgetError.message || 'A conexão não foi concluída')
             setConnectToken(null)
-            setSelectedConnectorId(undefined)
           }}
           onClose={() => {
             setConnectToken(null)
-            setSelectedConnectorId(undefined)
           }}
         />
       )}
