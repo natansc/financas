@@ -381,6 +381,14 @@ export default function PluggyImporter() {
             type="button"
             onClick={() => void startConnection()}
             disabled={connecting}
+            className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 disabled:opacity-50"
+          >
+            Pluggy Bank
+          </button>
+          <button
+            type="button"
+            onClick={() => void startConnection()}
+            disabled={connecting}
             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
           >
             Outro banco
@@ -393,7 +401,7 @@ export default function PluggyImporter() {
         <a href="https://meu.pluggy.ai/" target="_blank" rel="noreferrer" className="font-medium text-blue-700 underline">
           Meu Pluggy
         </a>{' '}
-        e depois use o botão Meu Pluggy acima.{' '}
+        e depois use o botão Meu Pluggy acima. O botão Pluggy Bank abre o seletor da Pluggy; escolha esse conector na lista.{' '}
         <a href="https://meu.pluggy.ai/api-guide" target="_blank" rel="noreferrer" className="text-blue-700 underline">
           Guia oficial
         </a>
