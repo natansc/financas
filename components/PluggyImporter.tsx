@@ -174,7 +174,7 @@ export default function PluggyImporter() {
       const response = await api.post('/api/pluggy/import-existing', {})
       if (response?.error) {
         if (response.hint?.includes('GET /v2/items')) {
-          setNotice('A Pluggy bloqueia a listagem automática geral. As contas que já aparecem abaixo continuam importáveis por conta ou pelo botão Importar todas.')
+          setNotice('A Pluggy bloqueou GET /v2/items para esta aplicação. Sem essa permissão, não dá para localizar e importar a conexão que ainda não aparece. Peça à Pluggy para habilitar a listagem de itens para as credenciais desta aplicação; depois volte aqui e tente novamente. Não precisa conectar o banco de novo.')
           return
         }
         throw new Error(`${response.error}${response.hint ? ` ${response.hint}` : ''}`)
