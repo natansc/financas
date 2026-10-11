@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   if (category) q = q.eq('category', category)
   if (accountId) q = q.eq('account_id', accountId)
   if (type === 'receita') q = q.gt('amount_brl', 0)
-  if (type === 'despesa') q = q.lt('amount_brl', 0)
+  if (type === 'despesa') q = q.lt('amount_brl', 0).eq('is_transfer', false)
 
   const { data, error } = await q
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -81,4 +81,3 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
-

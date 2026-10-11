@@ -3,10 +3,31 @@ import { getSupabaseAdmin, checkToken } from '@/lib/supabase-admin'
 
 const normalizeText = (value: string | null | undefined) => (value ?? '').trim().replace(/\s+/g, ' ')
 
+type ImportRow = {
+  purchase_date?: string
+  payment_date?: string | null
+  invoice_month?: string | null
+  card_name?: string | null
+  card_last_four?: string | null
+  category?: string | null
+  description?: string | null
+  installment?: string | null
+  amount_usd?: number | null
+  exchange_rate?: number | null
+  amount_brl?: number | null
+  is_transfer?: boolean
+}
+
+type ImportRequest = {
+  account_id?: string
+  invoice_month?: string | null
+  rows?: ImportRow[]
+}
+
 export async function POST(req: Request) {
   if (!checkToken(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { account_id, invoice_month, rows } = await req.json()
+  const { account_id, invoice_month, rows } = await req.json() as ImportRequest
 
   if (!account_id) return NextResponse.json({ error: 'account_id obrigatório' }, { status: 400 })
   if (!Array.isArray(rows) || !rows.length)
@@ -15,7 +36,7 @@ export async function POST(req: Request) {
   const supabase = getSupabaseAdmin()
 
   const seen = new Set<string>()
-  const payload = rows.reduce((acc: any[], r: any) => {
+  const payload = rows.reduce<Record<string, unknown>[]>((acc, r) => {
     const description = normalizeText(r.description)
     const key = [
       String(account_id),
@@ -41,6 +62,7 @@ export async function POST(req: Request) {
       amount_usd: Number(r.amount_usd ?? 0),
       exchange_rate: Number(r.exchange_rate ?? 0),
       amount_brl: Number(r.amount_brl ?? 0),
+      is_transfer: r.is_transfer === true,
       source: 'csv' as const,
     })
     return acc

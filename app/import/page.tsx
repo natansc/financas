@@ -5,34 +5,43 @@ import PdfImporter from '@/components/PdfImporter'
 import PluggyImporter from '@/components/PluggyImporter'
 
 export default function ImportPage() {
-  const [tab, setTab] = useState<'csv' | 'pdf' | 'pluggy'>('pdf')
+  const [tab, setTab] = useState<'itau-invoice' | 'c6-invoice' | 'c6-statement' | 'pluggy'>('itau-invoice')
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Importar fatura</h1>
+      <h1 className="text-2xl font-bold">Importar</h1>
 
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-gray-100 p-1 rounded-lg">
         <button
-          onClick={() => setTab('pdf')}
-          className={`flex-1 py-2 rounded-md text-sm font-medium ${tab === 'pdf' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
+          onClick={() => setTab('itau-invoice')}
+          className={`py-2 rounded-md text-sm font-medium ${tab === 'itau-invoice' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
         >
-          PDF (Itaú)
+          Fatura Itaú (PDF)
         </button>
         <button
-          onClick={() => setTab('csv')}
-          className={`flex-1 py-2 rounded-md text-sm font-medium ${tab === 'csv' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
+          onClick={() => setTab('c6-invoice')}
+          className={`py-2 rounded-md text-sm font-medium ${tab === 'c6-invoice' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
         >
-          CSV
+          Fatura C6 (CSV)
+        </button>
+        <button
+          onClick={() => setTab('c6-statement')}
+          className={`py-2 rounded-md text-sm font-medium ${tab === 'c6-statement' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
+        >
+          Extrato C6 (CSV)
         </button>
         <button
           onClick={() => setTab('pluggy')}
-          className={`flex-1 py-2 rounded-md text-sm font-medium ${tab === 'pluggy' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
+          className={`py-2 rounded-md text-sm font-medium ${tab === 'pluggy' ? 'bg-white shadow-sm' : 'text-gray-600'}`}
         >
-          Bancos
+          Pluggy
         </button>
       </div>
 
-      {tab === 'pdf' ? <PdfImporter /> : tab === 'csv' ? <CsvImporter /> : <PluggyImporter />}
+      {tab === 'itau-invoice' && <PdfImporter />}
+      {tab === 'c6-invoice' && <CsvImporter mode="invoice" />}
+      {tab === 'c6-statement' && <CsvImporter mode="statement" />}
+      {tab === 'pluggy' && <PluggyImporter />}
     </div>
   )
 }

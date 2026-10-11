@@ -56,6 +56,10 @@ Em **Período das movimentações**, selecione o mês inicial e final. Para impo
 
 Use os conectores Sandbox da Pluggy em desenvolvimento para validar o fluxo antes de conectar uma instituição real.
 
+### Importação manual do C6 Bank
+
+Em **Importar**, use **Fatura C6 (CSV)** somente para a fatura do cartão e selecione uma conta do tipo cartão de crédito. O mês selecionado é usado para agrupar a fatura; todos os valores são gravados como despesas negativas. Use **Extrato C6 (CSV)** somente para o extrato da conta e selecione uma conta bancária: entradas ficam positivas e saídas ficam negativas. Pagamentos de fatura no extrato são marcados como transferências e não entram nos totais de despesas, evitando contar novamente compras já importadas da fatura. Os dois formatos são reconhecidos separadamente e arquivos do formato errado são rejeitados. Reimportações ignoram lançamentos duplicados. Antes de usar essa classificação, aplique `supabase/migrations/20261011000000_mark_card_bill_payments_as_transfers.sql` no SQL Editor do Supabase.
+
 ### Recebimento de compras por webhook
 
 O endpoint `POST /api/notification-webhook` grava uma compra já estruturada como transação de origem `push`. Para habilitá-lo, aplique `supabase/migrations/20261010000000_push_notification_import.sql` e configure `IOS_NOTIFICATION_WEBHOOK_SECRET` com um segredo aleatório de pelo menos 32 caracteres somente nas variáveis de ambiente do servidor (por exemplo, na Vercel). O chamador deve enviar `Authorization: Bearer <segredo>` e um JSON neste formato:

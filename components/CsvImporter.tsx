@@ -5,7 +5,7 @@ import { api } from '@/lib/api'
 import { resolveCategory } from '@/lib/categorize'
 
 type CsvRow = Record<string, string>
-type ImportAccount = { id: string; name: string; last_four?: string | null }
+type ImportAccount = { id: string; name: string; type: string; last_four?: string | null }
 
 const isImportAccount = (value: unknown): value is ImportAccount =>
   typeof value === 'object'
@@ -14,6 +14,8 @@ const isImportAccount = (value: unknown): value is ImportAccount =>
   && typeof value.id === 'string'
   && 'name' in value
   && typeof value.name === 'string'
+  && 'type' in value
+  && typeof value.type === 'string'
 
 type NormalizedRow = {
   purchase_date: string
@@ -27,6 +29,7 @@ type NormalizedRow = {
   amount_usd: number
   exchange_rate: number
   amount_brl: number
+  is_transfer: boolean
 }
 
 const parseDate = (s: string) => {
@@ -83,6 +86,12 @@ const getField = (row: CsvRow, ...names: string[]) => {
 }
 
 const normalizeC6Description = (value: string) => value.replace(/\s+/g, ' ').trim()
+const isCardBillPayment = (value: string) => {
+  const text = normalizeHeader(value)
+  return text.includes('fat cartao')
+    || text.includes('fatura de cartao')
+    || text.includes('pagamento de fatura')
+}
 
 const matchesDataHeader = (value: string) => {
   const text = normalizeHeader(value)
@@ -115,27 +124,28 @@ const parseC6BankCsv = (rows: CsvRow[]): NormalizedRow[] => {
         amount_usd: 0,
         exchange_rate: 0,
         amount_brl: Number(amount.toFixed(2)),
+        is_transfer: isCardBillPayment(`${title} ${description}`),
       }
       return row
     })
     .filter((row): row is NormalizedRow => row !== null)
 }
 
-const parseC6InvoiceCsv = (rows: CsvRow[]): NormalizedRow[] => {
+const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[] => {
   return rows
     .map((r) => {
       const purchaseDate = parseDate(getField(r, 'Data de Compra', 'Data'))
       const description = normalizeC6Description(getField(r, 'Descrição', 'Description', 'Estabelecimento') || '')
       const categoryValue = getField(r, 'Categoria', 'Category')
       const installment = getField(r, 'Parcela', 'Installment') || 'Única'
-      const amount = parseMoney(getField(r, 'Valor (em R$)', 'Valor', 'Amount'))
+      const amount = parseMoney(getField(r, 'Valor (em R$)'))
 
       if (!purchaseDate || !description || !Number.isFinite(amount) || amount === 0) return null
 
       const row: NormalizedRow = {
         purchase_date: purchaseDate,
-        payment_date: purchaseDate,
-        invoice_month: null,
+        payment_date: `${invoiceMonth}-08`,
+        invoice_month: invoiceMonth,
         card_name: getField(r, 'Nome no Cartão', 'Nome', 'Titular') || 'Manual',
         card_last_four: getField(r, 'Final do Cartão', 'Final', 'Cartão') || '',
         category: resolveCategory(categoryValue && categoryValue !== '-' ? categoryValue.trim() : null, description),
@@ -143,62 +153,46 @@ const parseC6InvoiceCsv = (rows: CsvRow[]): NormalizedRow[] => {
         installment,
         amount_usd: 0,
         exchange_rate: 0,
-        amount_brl: Number(amount.toFixed(2)),
+        amount_brl: Number((-Math.abs(amount)).toFixed(2)),
+        is_transfer: false,
       }
       return row
     })
     .filter((row): row is NormalizedRow => row !== null)
 }
 
-const parseGenericCsv = (rows: CsvRow[]): NormalizedRow[] => {
-  return rows
-    .map((r) => {
-      const purchaseDate = parseDate(getField(r, 'Data de Compra', 'Data', 'Date'))
-      const description = normalizeC6Description(getField(r, 'Descrição', 'Description', 'Estabelecimento') || '')
-      const categoryValue = getField(r, 'Categoria', 'Category')
-      const amount = parseMoney(getField(r, 'Valor (em R$)', 'Valor', 'Amount'))
+type CsvImporterProps = { mode: 'invoice' | 'statement' }
 
-      if (!purchaseDate || !description || !Number.isFinite(amount) || amount === 0) return null
-
-      const row: NormalizedRow = {
-        purchase_date: purchaseDate,
-        payment_date: parseDate(getField(r, 'Data de Pagamento', 'Payment Date')) || purchaseDate,
-        invoice_month: null,
-        card_name: getField(r, 'Nome no Cartão', 'Nome', 'Titular') || 'Manual',
-        card_last_four: getField(r, 'Final do Cartão', 'Final', 'Cartão') || '',
-        category: resolveCategory(categoryValue && categoryValue !== '-' ? categoryValue.trim() : null, description),
-        description,
-        installment: getField(r, 'Parcela', 'Installment') || 'Única',
-        amount_usd: parseMoney(getField(r, 'Valor (em US$)', 'Valor US$', 'USD')),
-        exchange_rate: parseMoney(getField(r, 'Cotação (em R$)', 'Cotação', 'Rate')),
-        amount_brl: Number(amount.toFixed(2)),
-      }
-      return row
-    })
-    .filter((row): row is NormalizedRow => row !== null)
-}
-
-export default function CsvImporter() {
+export default function CsvImporter({ mode }: CsvImporterProps) {
   const [accounts, setAccounts] = useState<ImportAccount[]>([])
   const [accountId, setAccountId] = useState('')
   const [invoiceMonth, setInvoiceMonth] = useState(new Date().toISOString().slice(0, 7))
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ inserted: number; duplicates: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const eligibleAccounts = accounts.filter(account =>
+    mode === 'invoice' ? account.type === 'credit_card' : account.type !== 'credit_card'
+  )
 
   useEffect(() => {
     api.get('/api/accounts').then(d => {
       const list = Array.isArray(d) ? d.filter(isImportAccount) : []
       setAccounts(list)
-      if (list.length) setAccountId(list[0].id)
+      const eligible = list.filter(account =>
+        mode === 'invoice' ? account.type === 'credit_card' : account.type !== 'credit_card'
+      )
+      if (eligible.length) setAccountId(eligible[0].id)
     })
-  }, [])
+  }, [mode])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!accountId) {
-      setError('Cadastre uma conta primeiro (menu Contas) e selecione aqui.')
+    const account = eligibleAccounts.find(item => item.id === accountId)
+    if (!account) {
+      setError(mode === 'invoice'
+        ? 'Cadastre ou selecione um cartão de crédito antes de importar a fatura.'
+        : 'Cadastre ou selecione uma conta bancária antes de importar o extrato.')
       return
     }
 
@@ -231,30 +225,34 @@ export default function CsvImporter() {
               && headers.some(k => k.includes('valor (em r$)'))
               && headers.some(k => k === 'descricao')
 
-            const rows = hasC6BankHeaders
-              ? parseC6BankCsv(parsedRows)
-              : hasC6InvoiceHeaders
-                ? parseC6InvoiceCsv(parsedRows)
-                : parseGenericCsv(parsedRows)
+            const expectedFormat = mode === 'invoice' ? hasC6InvoiceHeaders : hasC6BankHeaders
+            if (!expectedFormat) {
+              throw new Error(mode === 'invoice'
+                ? 'Arquivo incompatível. Selecione o CSV da fatura do cartão C6 (Data de Compra, Descrição e Valor em R$).'
+                : 'Arquivo incompatível. Selecione o CSV do extrato bancário C6 (Data Lançamento, Entrada e Saída).')
+            }
+
+            const rows = mode === 'invoice'
+              ? parseC6InvoiceCsv(parsedRows, invoiceMonth)
+              : parseC6BankCsv(parsedRows)
 
             if (!rows.length) {
-              const formatHint = hasC6BankHeaders
-                ? 'Confira se as linhas têm data, descrição e valor de entrada ou saída.'
-                : hasC6InvoiceHeaders
-                  ? 'Confira se as linhas têm data de compra, descrição e valor em reais.'
-                  : 'Use o CSV de extrato do C6 (Data Lançamento, Entrada e Saída) ou de fatura (Data de Compra, Descrição e Valor em R$).'
-              throw new Error(`Nenhuma linha válida no CSV. ${formatHint}`)
+              throw new Error(mode === 'invoice'
+                ? 'Nenhuma compra válida encontrada na fatura. Confira data, descrição e valor em reais.'
+                : 'Nenhuma movimentação válida encontrada no extrato. Confira data, descrição e entrada ou saída.')
             }
 
             const payload = rows.map(row => ({
               ...row,
-              invoice_month: hasC6BankHeaders ? null : invoiceMonth,
+              card_name: mode === 'statement' ? account.name : row.card_name,
+              card_last_four: mode === 'statement' ? '' : row.card_last_four,
+              invoice_month: mode === 'invoice' ? invoiceMonth : null,
               payment_date: row.payment_date || row.purchase_date,
             }))
 
             const res = await api.post('/api/import', {
               account_id: accountId,
-              invoice_month: hasC6BankHeaders ? null : invoiceMonth,
+              invoice_month: mode === 'invoice' ? invoiceMonth : null,
               rows: payload,
             })
 
@@ -289,8 +287,12 @@ export default function CsvImporter() {
             onChange={e => setAccountId(e.target.value)}
             className="w-full border rounded-lg px-3 py-2 text-base bg-white"
           >
-            {!accounts.length && <option value="">Nenhuma conta cadastrada</option>}
-            {accounts.map(a => (
+            {!eligibleAccounts.length && (
+              <option value="">
+                {mode === 'invoice' ? 'Nenhum cartão de crédito cadastrado' : 'Nenhuma conta bancária cadastrada'}
+              </option>
+            )}
+            {eligibleAccounts.map(a => (
               <option key={a.id} value={a.id}>
                 {a.name}{a.last_four ? ` • ••${a.last_four}` : ''}
               </option>
@@ -298,23 +300,30 @@ export default function CsvImporter() {
           </select>
         </label>
 
-        <label className="block">
-          <span className="block text-sm font-medium text-gray-700 mb-1">Mês da fatura</span>
-          <input
-            type="month"
-            value={invoiceMonth}
-            onChange={e => setInvoiceMonth(e.target.value)}
-            className="w-full border rounded-lg px-3 py-2 text-base"
-          />
-        </label>
+        {mode === 'invoice' && (
+          <label className="block">
+            <span className="block text-sm font-medium text-gray-700 mb-1">Mês da fatura</span>
+            <input
+              type="month"
+              value={invoiceMonth}
+              onChange={e => setInvoiceMonth(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-base"
+            />
+          </label>
+        )}
       </div>
 
       <label className="block">
+        <span className="block text-sm text-gray-600 mb-2">
+          {mode === 'invoice'
+            ? 'Importe somente o CSV da fatura do cartão C6. Todos os lançamentos serão registrados como despesas no cartão.'
+            : 'Importe somente o CSV de movimentações da conta C6. Entradas ficam positivas e saídas, como Pix e pagamento de fatura, ficam negativas.'}
+        </span>
         <input
           type="file"
           accept=".csv,text/csv"
           onChange={handleUpload}
-          disabled={loading || !accountId}
+          disabled={loading || !accountId || !eligibleAccounts.length}
           className="block w-full text-sm text-gray-600 file:mr-3 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white disabled:opacity-50"
         />
       </label>

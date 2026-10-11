@@ -3,14 +3,36 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import TransactionForm from '@/components/TransactionForm'
 
+type TransactionAccount = {
+  id: string
+  name: string
+  type: string
+  last_four?: string | null
+  color?: string
+}
+
+type TransactionRow = {
+  id: string
+  account_id: string
+  purchase_date: string
+  payment_date?: string | null
+  invoice_month?: string | null
+  description: string
+  category?: string | null
+  installment?: string | null
+  amount_brl: number
+  is_transfer?: boolean
+  accounts?: Pick<TransactionAccount, 'name' | 'color' | 'last_four'>
+}
+
 export default function TransactionsPage() {
-  const [txs, setTxs] = useState<any[]>([])
-  const [accounts, setAccounts] = useState<any[]>([])
+  const [txs, setTxs] = useState<TransactionRow[]>([])
+  const [accounts, setAccounts] = useState<TransactionAccount[]>([])
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
   const [accountId, setAccountId] = useState('')
   const [category, setCategory] = useState('')
   const [type, setType] = useState('')
-  const [editing, setEditing] = useState<any | null>(null)
+  const [editing, setEditing] = useState<TransactionRow | null>(null)
   const [adding, setAdding] = useState(false)
 
   const load = () => {
@@ -28,7 +50,9 @@ export default function TransactionsPage() {
 
   useEffect(load, [month, accountId, category, type])
 
-  const categories = Array.from(new Set(txs.map(t => t.category).filter(Boolean)))
+  const categories = Array.from(new Set(
+    txs.map(t => t.category).filter((value): value is string => Boolean(value))
+  ))
 
   const remove = async (id: string) => {
     if (!confirm('Excluir este lançamento?')) return
@@ -36,7 +60,7 @@ export default function TransactionsPage() {
     load()
   }
 
-  const startEdit = (t: any) => {
+  const startEdit = (t: TransactionRow) => {
     setAdding(false)
     setEditing(t)
   }
@@ -51,7 +75,7 @@ export default function TransactionsPage() {
     setAdding(false)
   }
 
-  const total = txs.reduce((s, t) => s + t.amount_brl, 0)
+  const total = txs.reduce((s, t) => s + (t.is_transfer ? 0 : t.amount_brl), 0)
 
   return (
     <div className="space-y-4">
@@ -136,6 +160,7 @@ export default function TransactionsPage() {
                 {new Date(t.purchase_date + 'T00:00:00').toLocaleDateString('pt-BR')}
                 {t.installment && t.installment !== 'Única' ? ` • ${t.installment}` : ''}
                 {t.category ? ` • ${t.category}` : ''}
+                {t.is_transfer ? ' • Transferência (fora das despesas)' : ''}
                 {t.accounts?.name ? ` • ${t.accounts.name}` : ''}
               </p>
             </div>

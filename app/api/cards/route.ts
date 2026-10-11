@@ -33,11 +33,12 @@ export async function GET(req: Request) {
   // Busca transações pela payment_date (cartão é sempre no vencimento)
   const { data: txs, error: errTx } = await supabase
     .from('transactions')
-    .select('account_id, payment_date, purchase_date, amount_brl, category')
+    .select('account_id, payment_date, purchase_date, amount_brl, category, is_transfer')
     .in('account_id', accounts?.map(a => a.id) || [])
     .gte('payment_date', sinceIso)
     .lt('payment_date', untilIso)
     .lt('amount_brl', 0)
+    .eq('is_transfer', false)
 
   if (errTx) return NextResponse.json({ error: errTx.message }, { status: 500 })
 

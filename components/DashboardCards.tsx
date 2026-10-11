@@ -1,8 +1,10 @@
 'use client'
 
-export default function DashboardCards({ transactions }: { transactions: any[] }) {
-  const receitas = transactions.filter(t => t.amount_brl > 0).reduce((s, t) => s + t.amount_brl, 0)
-  const despesas = transactions.filter(t => t.amount_brl < 0).reduce((s, t) => s + Math.abs(t.amount_brl), 0)
+type DashboardTransaction = { amount_brl: number; is_transfer?: boolean }
+
+export default function DashboardCards({ transactions }: { transactions: DashboardTransaction[] }) {
+  const receitas = transactions.filter(t => !t.is_transfer && t.amount_brl > 0).reduce((s, t) => s + t.amount_brl, 0)
+  const despesas = transactions.filter(t => !t.is_transfer && t.amount_brl < 0).reduce((s, t) => s + Math.abs(t.amount_brl), 0)
   const saldo = receitas - despesas
 
   const cards = [
