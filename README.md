@@ -56,6 +56,26 @@ Em **Período das movimentações**, selecione o mês inicial e final. Para impo
 
 Use os conectores Sandbox da Pluggy em desenvolvimento para validar o fluxo antes de conectar uma instituição real.
 
+### Recebimento de compras por webhook
+
+O endpoint `POST /api/notification-webhook` grava uma compra já estruturada como transação de origem `push`. Para habilitá-lo, aplique `supabase/migrations/20261010000000_push_notification_import.sql` e configure `IOS_NOTIFICATION_WEBHOOK_SECRET` com um segredo aleatório de pelo menos 32 caracteres somente nas variáveis de ambiente do servidor (por exemplo, na Vercel). O chamador deve enviar `Authorization: Bearer <segredo>` e um JSON neste formato:
+
+```json
+{
+  "bank": "nubank",
+  "account_id": "UUID da conta cadastrada no app",
+  "event_id": "identificador único e estável do evento",
+  "description": "Loja Exemplo",
+  "amount_brl": 45.9,
+  "purchase_date": "2026-10-10",
+  "payment_date": "2026-10-10"
+}
+```
+
+`bank` aceita `itau`, `nubank`, `c6` e `banco_do_brasil`. `payment_date` é opcional; sem ela, será usada a data da compra. O mesmo `event_id` pode ser reenviado sem duplicar a transação. O webhook não guarda o texto integral da notificação.
+
+**Limitação do iPhone:** iOS não oferece ao Atalhos nem a apps de terceiros um gatilho para ler automaticamente as notificações push de outros apps. Portanto, esse endpoint é apenas o destino para um encaminhador que consiga fornecer os dados; não habilita, por si só, captura automática das notificações do Itaú, Nubank, C6 ou Banco do Brasil. Não configure um atalho com base no suposto gatilho “Notificação”: ele não existe no iOS.
+
 ### Segurança antes de publicar
 
 O app ainda usa `NEXT_PUBLIC_APP_TOKEN` no navegador como proteção das APIs. Como esse valor fica público no bundle, ele não protege dados financeiros em uma implantação acessível pela internet. Antes de usar conexões bancárias reais em produção, implemente autenticação de usuário e autorização no servidor; mantenha `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET` e `SUPABASE_SERVICE_ROLE_KEY` somente no servidor.

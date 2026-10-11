@@ -191,23 +191,39 @@ export default function PluggyImporter() {
   }
 
   const importConnectionById = async () => {
-    const itemId = existingItemId.trim()
-    if (!itemId) {
-      setError('Informe o ID do item da conexão Pluggy.')
+    const references = existingItemId.split(/\r?\n/).map(value => value.trim()).filter(Boolean)
+    if (!references.length) {
+      setError('Cole o link do Meu Pluggy ou o ID do item.')
       return
     }
 
     setImportingItem(true)
     setError(null)
     setMessage(null)
+    const imported: string[] = []
+    const failed: string[] = []
     try {
-      const response = await api.post('/api/pluggy/connections', { item_id: itemId })
-      if (response?.error) throw new Error(String(response.error))
-      setExistingItemId('')
-      setMessage(
-        `${response.institution_name}: ${response.accounts_added_or_linked} contas adicionadas ou vinculadas.`
-      )
-      await reload()
+      for (const reference of references) {
+        const match = reference.match(
+          /^https:\/\/meu\.pluggy\.ai\/connections\/([^/?#]+)\/?$/i
+        )
+        const itemId = match?.[1] ?? reference
+        const response = await api.post('/api/pluggy/connections', { item_id: itemId })
+        if (response?.error) {
+          failed.push(`${reference}: ${String(response.error)}`)
+          continue
+        }
+        imported.push(`${response.institution_name}: ${response.accounts_added_or_linked} contas`)
+      }
+
+      setExistingItemId(failed.join('\n'))
+      if (imported.length) {
+        setMessage(`Importado: ${imported.join('; ')}.`)
+        await reload()
+      }
+      if (failed.length) {
+        setError(`Não foi possível importar ${failed.length} conexão(ões): ${failed.join('; ')}`)
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível importar essa conexão')
     } finally {
@@ -455,18 +471,18 @@ export default function PluggyImporter() {
 
       <details className="rounded-lg border border-gray-200 bg-white p-3">
         <summary className="cursor-pointer text-sm font-medium text-gray-700">
-          Importar conexão pelo ID do item
+          Importar conexão pelo link ou ID do item
         </summary>
         <p className="my-2 text-xs text-gray-500">
-          Alternativa à listagem geral: busca uma conexão específica que já existe na sua aplicação Pluggy.
+          Cole um link de conexão do Meu Pluggy ou um ID de item autorizado para esta aplicação. Pode colar vários, um por linha.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            type="text"
+          <textarea
             value={existingItemId}
             onChange={event => setExistingItemId(event.target.value)}
-            placeholder="ID do item Pluggy"
-            aria-label="ID do item Pluggy"
+            placeholder="https://meu.pluggy.ai/connections/..."
+            aria-label="Links ou IDs de itens Pluggy"
+            rows={3}
             className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm"
           />
           <button
@@ -475,7 +491,7 @@ export default function PluggyImporter() {
             disabled={importingItem || !existingItemId.trim()}
             className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {importingItem ? 'Importando...' : 'Buscar conexão'}
+            {importingItem ? 'Importando...' : 'Importar conexão(ões)'}
           </button>
         </div>
       </details>
