@@ -5,6 +5,15 @@ import { api } from '@/lib/api'
 import { resolveCategory } from '@/lib/categorize'
 
 type CsvRow = Record<string, string>
+type ImportAccount = { id: string; name: string; last_four?: string | null }
+
+const isImportAccount = (value: unknown): value is ImportAccount =>
+  typeof value === 'object'
+  && value !== null
+  && 'id' in value
+  && typeof value.id === 'string'
+  && 'name' in value
+  && typeof value.name === 'string'
 
 type NormalizedRow = {
   purchase_date: string
@@ -23,30 +32,51 @@ type NormalizedRow = {
 const parseDate = (s: string) => {
   if (!s) return ''
   const clean = s.trim()
-  if (clean.includes('/')) {
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
     const [d, m, y] = clean.split('/')
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    const isoDate = `${y}-${m}-${d}`
+    const date = new Date(`${isoDate}T00:00:00.000Z`)
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === isoDate ? isoDate : ''
   }
-  return clean
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return ''
+  const date = new Date(`${clean}T00:00:00.000Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === clean ? clean : ''
 }
 
 const parseMoney = (value: string) => {
   if (!value) return 0
-  const clean = value
+  let clean = value
     .trim()
     .replace(/R\$\s*/gi, '')
     .replace(/\s+/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-
+  const isParenthesizedNegative = clean.startsWith('(') && clean.endsWith(')')
+  clean = clean.replace(/[()]/g, '').replace(/[^\d,.-]/g, '')
   if (!clean) return 0
-  const num = Number.parseFloat(clean)
-  return Number.isFinite(num) ? num : 0
+
+  const commaIndex = clean.lastIndexOf(',')
+  const periodIndex = clean.lastIndexOf('.')
+  if (commaIndex >= 0 && periodIndex >= 0) {
+    clean = commaIndex > periodIndex
+      ? clean.replace(/\./g, '').replace(',', '.')
+      : clean.replace(/,/g, '')
+  } else if (commaIndex >= 0) {
+    clean = clean.replace(',', '.')
+  }
+
+  const amount = Number(clean)
+  if (!Number.isFinite(amount)) return Number.NaN
+  return isParenthesizedNegative ? -Math.abs(amount) : amount
 }
+
+const normalizeHeader = (value: string) => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim()
 
 const getField = (row: CsvRow, ...names: string[]) => {
   for (const n of names) {
-    const key = Object.keys(row).find(k => k.trim().toLowerCase() === n.trim().toLowerCase())
+    const key = Object.keys(row).find(k => normalizeHeader(k) === normalizeHeader(n))
     if (key) return row[key]
   }
   return ''
@@ -55,8 +85,8 @@ const getField = (row: CsvRow, ...names: string[]) => {
 const normalizeC6Description = (value: string) => value.replace(/\s+/g, ' ').trim()
 
 const matchesDataHeader = (value: string) => {
-  const text = value.toLowerCase()
-  return text.includes('data l') || text.includes('data de compra') || text.includes('data de pagamento')
+  const text = normalizeHeader(value)
+  return text.includes('data lanc') || text.includes('data de compra') || text.includes('data de pagamento')
 }
 
 const parseC6BankCsv = (rows: CsvRow[]): NormalizedRow[] => {
@@ -71,7 +101,7 @@ const parseC6BankCsv = (rows: CsvRow[]): NormalizedRow[] => {
       const paymentDate = parseDate(getField(r, 'Data Contábil', 'Data Contabil'))
       const amount = entry > 0 ? entry : exit > 0 ? -exit : 0
 
-      if (!purchaseDate || !rawDescription || !Number.isFinite(amount)) return null
+      if (!purchaseDate || !rawDescription || !Number.isFinite(amount) || amount === 0) return null
 
       const row: NormalizedRow = {
         purchase_date: purchaseDate,
@@ -100,7 +130,7 @@ const parseC6InvoiceCsv = (rows: CsvRow[]): NormalizedRow[] => {
       const installment = getField(r, 'Parcela', 'Installment') || 'Única'
       const amount = parseMoney(getField(r, 'Valor (em R$)', 'Valor', 'Amount'))
 
-      if (!purchaseDate || !description || !Number.isFinite(amount)) return null
+      if (!purchaseDate || !description || !Number.isFinite(amount) || amount === 0) return null
 
       const row: NormalizedRow = {
         purchase_date: purchaseDate,
@@ -128,7 +158,7 @@ const parseGenericCsv = (rows: CsvRow[]): NormalizedRow[] => {
       const categoryValue = getField(r, 'Categoria', 'Category')
       const amount = parseMoney(getField(r, 'Valor (em R$)', 'Valor', 'Amount'))
 
-      if (!purchaseDate || !description || !Number.isFinite(amount)) return null
+      if (!purchaseDate || !description || !Number.isFinite(amount) || amount === 0) return null
 
       const row: NormalizedRow = {
         purchase_date: purchaseDate,
@@ -149,7 +179,7 @@ const parseGenericCsv = (rows: CsvRow[]): NormalizedRow[] => {
 }
 
 export default function CsvImporter() {
-  const [accounts, setAccounts] = useState<any[]>([])
+  const [accounts, setAccounts] = useState<ImportAccount[]>([])
   const [accountId, setAccountId] = useState('')
   const [invoiceMonth, setInvoiceMonth] = useState(new Date().toISOString().slice(0, 7))
   const [loading, setLoading] = useState(false)
@@ -158,7 +188,7 @@ export default function CsvImporter() {
 
   useEffect(() => {
     api.get('/api/accounts').then(d => {
-      const list = Array.isArray(d) ? d : []
+      const list = Array.isArray(d) ? d.filter(isImportAccount) : []
       setAccounts(list)
       if (list.length) setAccountId(list[0].id)
     })
@@ -189,12 +219,17 @@ export default function CsvImporter() {
         complete: async (results: ParseResult<CsvRow>) => {
           try {
             const parsedRows = Array.isArray(results.data) ? results.data : []
-            const hasC6BankHeaders = Object.keys(parsedRows[0] ?? {}).some(k =>
-              matchesDataHeader(k) || k.toLowerCase().includes('entrada') || k.toLowerCase().includes('saída') || k.toLowerCase().includes('saida')
-            )
-            const hasC6InvoiceHeaders = Object.keys(parsedRows[0] ?? {}).some(k =>
-              k.toLowerCase().includes('data de compra') || k.toLowerCase().includes('nome no cartao') || k.toLowerCase().includes('valor (em r$)')
-            )
+            if (results.errors.length) {
+              throw new Error(`Não foi possível ler o CSV: ${results.errors[0].message}`)
+            }
+
+            const headers = Object.keys(parsedRows[0] ?? {}).map(normalizeHeader)
+            const hasC6BankHeaders = headers.some(k => k.includes('data lanc'))
+              && headers.some(k => k.includes('entrada'))
+              && headers.some(k => k.includes('saida'))
+            const hasC6InvoiceHeaders = headers.some(k => k.includes('data de compra'))
+              && headers.some(k => k.includes('valor (em r$)'))
+              && headers.some(k => k === 'descricao')
 
             const rows = hasC6BankHeaders
               ? parseC6BankCsv(parsedRows)
@@ -202,7 +237,14 @@ export default function CsvImporter() {
                 ? parseC6InvoiceCsv(parsedRows)
                 : parseGenericCsv(parsedRows)
 
-            if (!rows.length) throw new Error('Nenhuma linha válida no CSV')
+            if (!rows.length) {
+              const formatHint = hasC6BankHeaders
+                ? 'Confira se as linhas têm data, descrição e valor de entrada ou saída.'
+                : hasC6InvoiceHeaders
+                  ? 'Confira se as linhas têm data de compra, descrição e valor em reais.'
+                  : 'Use o CSV de extrato do C6 (Data Lançamento, Entrada e Saída) ou de fatura (Data de Compra, Descrição e Valor em R$).'
+              throw new Error(`Nenhuma linha válida no CSV. ${formatHint}`)
+            }
 
             const payload = rows.map(row => ({
               ...row,
