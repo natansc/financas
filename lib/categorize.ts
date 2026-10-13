@@ -5,10 +5,14 @@
 
 type Rule = { category: string; rx: RegExp }
 
+const TRAVEL_KEYWORDS = /\b(UBER[\s*._-]*RIDES?|DECOLAR|BOOKING(?:\.COM|\s+COM)?|AIRBNB|EXPEDIA|HOTEIS?\s?\.?\s?COM|HOTELS?\s?\.?\s?COM|TRIVAGO|HURB|CVC|MAX\s?MILHAS|123\s?MILHAS|AZUL(?:\s?LINHAS)?|AZULVIA|GOL(?:\s?LINHAS)?|LATAM|PASSAREDO|VOEPASS|TAP(?:\s?AIR)?|AVIANCA|COPA\s?AIRLINES|AMERICAN\s?AIRLINES|UNITED\s?AIRLINES|DELTA\s?AIRLINES|AIR\s?FRANCE|LUFTHANSA|TURISMO|POUSADA|HOTEL|HOSTEL|CRUZEIRO|VIAJES|FLOT|SP\s?HOLAFLY)\b/
 const FUEL_KEYWORDS = /\b(POSTOS?|AUTO\s?POSTOS?|POSTO\s+(DE\s+)?(GASOLINA|COMBUSTIVEL)|COMBUSTIVEIS?|ABASTECIMENTO|GASOLINA|ETANOL|ALCOOL|DIESEL|GNV|IPIRANGA|PETROBRAS|SHELL|ALE\s+COMBUSTIVEIS|RAIZEN|VIBRA\s+ENERGIA|RODOIL|AUTO\s?PECAS|OFICINA\s+MECANICA|MECANICA\s+AUTOMOTIVA|BORRACHARIA|TROCA\s+DE\s+OLEO|LAVA\s?JATO|AUTO\s?CENTER)\b/
 
 /** Ordem importa: primeira regra que casar vence */
 const RULES: Rule[] = [
+  // Viagens, companhias aéreas e reservas devem preceder o Uber genérico de Transporte.
+  { category: 'Viagem', rx: TRAVEL_KEYWORDS },
+
   // Combustível e serviços automotivos sempre entram em Transporte.
   { category: 'Transporte', rx: FUEL_KEYWORDS },
 
@@ -84,7 +88,11 @@ export function resolveCategory(
   itauCategory: string | null | undefined,
   description: string
 ): string | null {
-  if (FUEL_KEYWORDS.test(normalize(description))) {
+  const normalizedDescription = normalize(description)
+  if (TRAVEL_KEYWORDS.test(normalizedDescription)) {
+    return 'Viagem'
+  }
+  if (FUEL_KEYWORDS.test(normalizedDescription)) {
     return 'Transporte'
   }
   if (itauCategory && itauCategory.toLowerCase() !== 'outros') {

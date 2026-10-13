@@ -63,6 +63,7 @@ export async function POST(req: Request) {
 
   const supabase = getSupabaseAdmin()
   let reassigned = 0
+  let recategorized = 0
 
   const seen = new Set<string>()
   const payload = rows.reduce<ImportTransaction[]>((acc, r) => {
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
     const purchaseDates = payload.map(row => row.purchase_date).sort()
     const { data: existing, error: existingError } = await supabase
       .from('transactions')
-      .select('id, account_id, purchase_date, description, amount_brl, installment, invoice_month')
+      .select('id, account_id, purchase_date, description, amount_brl, installment, invoice_month, category')
       .eq('account_id', account_id)
       .eq('source', 'csv')
       .gte('purchase_date', purchaseDates[0])
@@ -114,16 +115,21 @@ export async function POST(req: Request) {
 
     if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
 
-    const incomingKeys = new Set(payload.map(transactionKey))
-    const idsToRelabel = (existing ?? [])
-      .filter(row => row.invoice_month !== invoiceMonth && incomingKeys.has(transactionKey({
+    const incomingByKey = new Map(payload.map(row => [transactionKey(row), row]))
+    const matchedRows = (existing ?? []).flatMap(row => {
+      const key = transactionKey({
         account_id: row.account_id,
         purchase_date: row.purchase_date,
         description: row.description,
         amount_brl: Number(row.amount_brl),
         installment: row.installment || 'Única',
-      })))
-      .map(row => row.id)
+      })
+      const incoming = incomingByKey.get(key)
+      return incoming ? [{ existing: row, incoming }] : []
+    })
+    const idsToRelabel = matchedRows
+      .filter(({ existing }) => existing.invoice_month !== invoiceMonth)
+      .map(({ existing }) => existing.id)
 
     if (idsToRelabel.length) {
       const { error: relabelError } = await supabase
@@ -135,6 +141,23 @@ export async function POST(req: Request) {
       if (relabelError) return NextResponse.json({ error: relabelError.message }, { status: 500 })
       reassigned = idsToRelabel.length
     }
+
+    const rowsToRecategorize = matchedRows.filter(({ existing, incoming }) =>
+      existing.category === 'Transporte' && incoming.category === 'Viagem'
+    )
+    const recategorizationResults = await Promise.all(rowsToRecategorize.map(({ existing }) =>
+      supabase
+        .from('transactions')
+        .update({ category: 'Viagem' })
+        .eq('id', existing.id)
+        .eq('source', 'csv')
+        .eq('category', 'Transporte')
+    ))
+    const recategorizationError = recategorizationResults.find(result => result.error)?.error
+    if (recategorizationError) {
+      return NextResponse.json({ error: recategorizationError.message }, { status: 500 })
+    }
+    recategorized = rowsToRecategorize.length
   }
 
   const { data, error } = await supabase
@@ -151,6 +174,7 @@ export async function POST(req: Request) {
     inserted: data?.length ?? 0,
     duplicates: payload.length - (data?.length ?? 0),
     reassigned,
+    recategorized,
     total: payload.length,
   })
 }
