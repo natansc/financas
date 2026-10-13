@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Papa, { ParseResult } from 'papaparse'
 import { api } from '@/lib/api'
-import { resolveCategory } from '@/lib/categorize'
+import { categorizeByKeywords, resolveCategory } from '@/lib/categorize'
 
 type CsvRow = Record<string, string>
 type ImportAccount = { id: string; name: string; type: string; last_four?: string | null }
@@ -151,6 +151,7 @@ const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[
       const categoryValue = getField(r, 'Categoria', 'Category')
       const installment = getField(r, 'Parcela', 'Installment') || 'Única'
       const amount = parseMoney(getField(r, 'Valor (em R$)'))
+      const keywordCategory = categorizeByKeywords(description)
 
       if (
         !purchaseDate
@@ -165,7 +166,9 @@ const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[
         invoice_month: invoiceMonth,
         card_name: getField(r, 'Nome no Cartão', 'Nome', 'Titular') || 'Manual',
         card_last_four: getField(r, 'Final do Cartão', 'Final', 'Cartão') || '',
-        category: resolveCategory(categoryValue && categoryValue !== '-' ? categoryValue.trim() : null, description),
+        category: keywordCategory === 'Supermercado'
+          ? keywordCategory
+          : resolveCategory(categoryValue && categoryValue !== '-' ? categoryValue.trim() : null, description),
         description,
         installment,
         amount_usd: 0,
