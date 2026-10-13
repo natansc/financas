@@ -29,14 +29,18 @@ export async function GET(req: Request) {
   const until = new Date(Date.UTC(selectedYear, selectedMonthNumber, 1))
   const sinceIso = since.toISOString().slice(0, 10)
   const untilIso = until.toISOString().slice(0, 10)
+  const sinceMonth = sinceIso.slice(0, 7)
+  const untilMonth = untilIso.slice(0, 7)
 
-  // Busca transações pela payment_date (cartão é sempre no vencimento)
   const { data: txs, error: errTx } = await supabase
     .from('transactions')
-    .select('account_id, payment_date, purchase_date, amount_brl, category, is_transfer')
+    .select('account_id, payment_date, purchase_date, invoice_month, amount_brl, category, is_transfer')
     .in('account_id', accounts?.map(a => a.id) || [])
-    .gte('payment_date', sinceIso)
-    .lt('payment_date', untilIso)
+    .or(
+      `and(invoice_month.gte.${sinceMonth},invoice_month.lt.${untilMonth}),` +
+      `and(invoice_month.is.null,payment_date.gte.${sinceIso},payment_date.lt.${untilIso}),` +
+      `and(invoice_month.is.null,payment_date.is.null,purchase_date.gte.${sinceIso},purchase_date.lt.${untilIso})`
+    )
     .lt('amount_brl', 0)
     .eq('is_transfer', false)
 
@@ -52,10 +56,10 @@ export async function GET(req: Request) {
   const cards = (accounts ?? []).map(acc => {
     const accTxs = (txs ?? []).filter(t => t.account_id === acc.id)
 
-    // Agrupa por payment_date (o mês que o dinheiro sai)
+    // Imported invoices use invoice_month; legacy rows fall back to payment or purchase date.
     const monthly = monthKeys.map(m => {
       const total = accTxs
-        .filter(t => (t.payment_date || t.purchase_date).startsWith(m))
+        .filter(t => (t.invoice_month || t.payment_date || t.purchase_date).startsWith(m))
         .reduce((s, t) => s + Math.abs(t.amount_brl), 0)
       return { month: m, total: Number(total.toFixed(2)) }
     })
@@ -67,7 +71,7 @@ export async function GET(req: Request) {
     // Top categorias do mês selecionado
     const catTotals: Record<string, number> = {}
     accTxs
-      .filter(t => (t.payment_date || t.purchase_date).startsWith(selectedMonth))
+      .filter(t => (t.invoice_month || t.payment_date || t.purchase_date).startsWith(selectedMonth))
       .forEach(t => {
         const c = t.category || 'Sem categoria'
         catTotals[c] = (catTotals[c] || 0) + Math.abs(t.amount_brl)
@@ -98,7 +102,7 @@ export async function GET(req: Request) {
   // Meses disponíveis
   const monthsWithData = new Set<string>()
   ;(txs ?? []).forEach(t => {
-    const ref = t.payment_date || t.purchase_date
+    const ref = t.invoice_month || t.payment_date || t.purchase_date
     if (ref) monthsWithData.add(ref.slice(0, 7))
   })
 

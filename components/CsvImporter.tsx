@@ -46,16 +46,13 @@ const parseDate = (s: string) => {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === clean ? clean : ''
 }
 
-const getC6InvoicePaymentDate = (purchaseDate: string) => {
-  const [year, month, day] = purchaseDate.split('-').map(Number)
-  const closingMonth = new Date(Date.UTC(year, month - 1 + (day >= 4 ? 1 : 0), 1))
-  const dueMonth = new Date(Date.UTC(
-    closingMonth.getUTCFullYear(),
-    closingMonth.getUTCMonth() + 1,
-    1,
-  ))
-  const dueMonthKey = `${dueMonth.getUTCFullYear()}-${String(dueMonth.getUTCMonth() + 1).padStart(2, '0')}`
-  return { paymentDate: `${dueMonthKey}-08`, invoiceMonth: dueMonthKey }
+const getC6InvoiceMonthFromFilename = (filename: string) => {
+  const match = filename.match(/fatura[_-](\d{4})-(\d{2})-(\d{2})/i)
+  if (!match) return null
+
+  const [, year, month, day] = match
+  const fileDate = parseDate(`${year}-${month}-${day}`)
+  return fileDate ? `${year}-${month}` : null
 }
 
 const parseMoney = (value: string) => {
@@ -148,7 +145,7 @@ const parseC6BankCsv = (rows: CsvRow[]): NormalizedRow[] => {
     .filter((row): row is NormalizedRow => row !== null)
 }
 
-const parseC6InvoiceCsv = (rows: CsvRow[]): NormalizedRow[] => {
+const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[] => {
   return rows
     .map((r) => {
       const purchaseDate = parseDate(getField(r, 'Data de Compra', 'Data'))
@@ -165,10 +162,9 @@ const parseC6InvoiceCsv = (rows: CsvRow[]): NormalizedRow[] => {
         || amount === 0
       ) return null
 
-      const { paymentDate, invoiceMonth } = getC6InvoicePaymentDate(purchaseDate)
       const row: NormalizedRow = {
         purchase_date: purchaseDate,
-        payment_date: paymentDate,
+        payment_date: purchaseDate,
         invoice_month: invoiceMonth,
         card_name: getField(r, 'Nome no Cartão', 'Nome', 'Titular') || 'Manual',
         card_last_four: getField(r, 'Final do Cartão', 'Final', 'Cartão') || '',
@@ -191,7 +187,7 @@ export default function CsvImporter({ mode }: CsvImporterProps) {
   const [accounts, setAccounts] = useState<ImportAccount[]>([])
   const [accountId, setAccountId] = useState('')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<{ inserted: number; duplicates: number; total: number } | null>(null)
+  const [result, setResult] = useState<{ inserted: number; duplicates: number; reassigned: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const eligibleAccounts = accounts.filter(account =>
     mode === 'invoice' ? account.type === 'credit_card' : account.type !== 'credit_card'
@@ -222,6 +218,12 @@ export default function CsvImporter({ mode }: CsvImporterProps) {
     setLoading(true); setResult(null); setError(null)
 
     try {
+      const invoiceMonthFromFilename = mode === 'invoice' ? getC6InvoiceMonthFromFilename(file.name) : null
+      if (mode === 'invoice' && !invoiceMonthFromFilename) {
+        throw new Error('O nome do arquivo da fatura deve incluir a data no formato Fatura_AAAA-MM-DD, por exemplo Fatura_2026-10-10.csv.')
+      }
+      const invoiceMonth = invoiceMonthFromFilename ?? ''
+
       const text = await file.text()
       const lines = text.split(/\r?\n/)
       const startIndex = lines.findIndex(line => matchesDataHeader(line))
@@ -256,7 +258,7 @@ export default function CsvImporter({ mode }: CsvImporterProps) {
             }
 
             const rows = mode === 'invoice'
-              ? parseC6InvoiceCsv(parsedRows)
+              ? parseC6InvoiceCsv(parsedRows, invoiceMonth)
               : parseC6BankCsv(parsedRows)
 
             if (!rows.length) {
@@ -278,7 +280,12 @@ export default function CsvImporter({ mode }: CsvImporterProps) {
             })
 
             if (res.error) throw new Error(res.error)
-            setResult({ inserted: res.inserted, duplicates: res.duplicates, total: res.total })
+            setResult({
+              inserted: res.inserted,
+              duplicates: res.duplicates,
+              reassigned: res.reassigned ?? 0,
+              total: res.total,
+            })
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro desconhecido')
           } finally {
@@ -343,6 +350,7 @@ export default function CsvImporter({ mode }: CsvImporterProps) {
       {result && (
         <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm">
           ✅ {result.inserted} importadas • {result.duplicates} duplicadas ignoradas (de {result.total})
+          {result.reassigned > 0 && ` • ${result.reassigned} relançadas no mês da fatura`}
         </div>
       )}
       {error && (

@@ -13,13 +13,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const [y, m] = month.split('-').map(Number)
   const end = new Date(y, m, 1).toISOString().slice(0, 10)
 
-  // Filtra por payment_date (mês do vencimento)
   const { data, error } = await supabase
     .from('transactions')
-    .select('description, category, amount_brl, purchase_date, payment_date, installment')
+    .select('description, category, amount_brl, purchase_date, payment_date, invoice_month, installment')
     .eq('account_id', id)
-    .gte('payment_date', start)
-    .lt('payment_date', end)
+    .or(
+      `invoice_month.eq.${month},` +
+      `and(invoice_month.is.null,payment_date.gte.${start},payment_date.lt.${end}),` +
+      `and(invoice_month.is.null,payment_date.is.null,purchase_date.gte.${start},purchase_date.lt.${end})`
+    )
     .lt('amount_brl', 0)
     .order('amount_brl', { ascending: true })
 

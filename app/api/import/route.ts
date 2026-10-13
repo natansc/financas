@@ -24,6 +24,34 @@ type ImportRequest = {
   rows?: ImportRow[]
 }
 
+type ImportTransaction = {
+  account_id: string
+  payment_date: string
+  invoice_month: string | null
+  purchase_date: string
+  card_name: string | null | undefined
+  card_last_four: string | null | undefined
+  category: string | null | undefined
+  description: string
+  installment: string
+  amount_usd: number
+  exchange_rate: number
+  amount_brl: number
+  is_transfer: boolean
+  source: 'csv'
+}
+
+const transactionKey = (transaction: Pick<
+  ImportTransaction,
+  'account_id' | 'purchase_date' | 'description' | 'amount_brl' | 'installment'
+>) => [
+  transaction.account_id,
+  transaction.purchase_date,
+  normalizeText(transaction.description),
+  transaction.amount_brl.toFixed(2),
+  transaction.installment,
+].join('|')
+
 export async function POST(req: Request) {
   if (!checkToken(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
@@ -34,9 +62,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'nenhuma linha válida' }, { status: 400 })
 
   const supabase = getSupabaseAdmin()
+  let reassigned = 0
 
   const seen = new Set<string>()
-  const payload = rows.reduce<Record<string, unknown>[]>((acc, r) => {
+  const payload = rows.reduce<ImportTransaction[]>((acc, r) => {
     const description = normalizeText(r.description)
     const key = [
       String(account_id),
@@ -72,6 +101,42 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'nenhuma linha válida' }, { status: 400 })
   }
 
+  const invoiceMonth = payload[0].invoice_month
+  if (invoiceMonth && payload.every(row => row.invoice_month === invoiceMonth)) {
+    const purchaseDates = payload.map(row => row.purchase_date).sort()
+    const { data: existing, error: existingError } = await supabase
+      .from('transactions')
+      .select('id, account_id, purchase_date, description, amount_brl, installment, invoice_month')
+      .eq('account_id', account_id)
+      .eq('source', 'csv')
+      .gte('purchase_date', purchaseDates[0])
+      .lte('purchase_date', purchaseDates[purchaseDates.length - 1])
+
+    if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
+
+    const incomingKeys = new Set(payload.map(transactionKey))
+    const idsToRelabel = (existing ?? [])
+      .filter(row => row.invoice_month !== invoiceMonth && incomingKeys.has(transactionKey({
+        account_id: row.account_id,
+        purchase_date: row.purchase_date,
+        description: row.description,
+        amount_brl: Number(row.amount_brl),
+        installment: row.installment || 'Única',
+      })))
+      .map(row => row.id)
+
+    if (idsToRelabel.length) {
+      const { error: relabelError } = await supabase
+        .from('transactions')
+        .update({ invoice_month: invoiceMonth })
+        .in('id', idsToRelabel)
+        .eq('source', 'csv')
+
+      if (relabelError) return NextResponse.json({ error: relabelError.message }, { status: 500 })
+      reassigned = idsToRelabel.length
+    }
+  }
+
   const { data, error } = await supabase
     .from('transactions')
     .upsert(payload, {
@@ -85,6 +150,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     inserted: data?.length ?? 0,
     duplicates: payload.length - (data?.length ?? 0),
+    reassigned,
     total: payload.length,
   })
 }

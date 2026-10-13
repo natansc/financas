@@ -18,13 +18,14 @@ export async function GET(req: Request) {
     .order('purchase_date', { ascending: false })
 
   if (month) {
-    // Filtra por payment_date (cartão) OU purchase_date (pix/dinheiro sem payment_date)
+    // Invoice month is authoritative for card transactions; date filtering is the fallback for older rows.
     const [y, m] = month.split('-').map(Number)
     const start = `${y}-${String(m).padStart(2, '0')}-01`
     const end = new Date(y, m, 1).toISOString().slice(0, 10)
     q = q.or(
-      `and(payment_date.gte.${start},payment_date.lt.${end}),` +
-      `and(payment_date.is.null,purchase_date.gte.${start},purchase_date.lt.${end})`
+      `invoice_month.eq.${month},` +
+      `and(invoice_month.is.null,payment_date.gte.${start},payment_date.lt.${end}),` +
+      `and(invoice_month.is.null,payment_date.is.null,purchase_date.gte.${start},purchase_date.lt.${end})`
     )
   }
   if (category) q = q.eq('category', category)
