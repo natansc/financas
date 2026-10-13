@@ -48,7 +48,7 @@ const parseDate = (s: string) => {
 
 const getC6InvoicePaymentDate = (purchaseDate: string) => {
   const [year, month, day] = purchaseDate.split('-').map(Number)
-  const closingMonth = new Date(Date.UTC(year, month - 1 + (day > 4 ? 1 : 0), 1))
+  const closingMonth = new Date(Date.UTC(year, month - 1 + (day >= 4 ? 1 : 0), 1))
   const dueMonth = new Date(Date.UTC(
     closingMonth.getUTCFullYear(),
     closingMonth.getUTCMonth() + 1,
