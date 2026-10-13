@@ -103,7 +103,7 @@ const isCardBillPayment = (value: string) => {
 }
 const isInvoicePaymentEntry = (value: string) => {
   const text = normalizeHeader(value).replace(/\s+/g, ' ')
-  return text.includes('fatura') && /\b(pagamento|pagto|pgto)\b/.test(text)
+  return /\b(pagamento|pagto|pgto)\b/.test(text)
 }
 const matchesDataHeader = (value: string) => {
   const text = normalizeHeader(value)
