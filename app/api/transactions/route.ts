@@ -13,7 +13,7 @@ export async function GET(req: Request) {
 
   let q = supabase
     .from('transactions')
-    .select('*, accounts(name, color, last_four)')
+    .select('*, accounts!inner(name, color, last_four, type)')
     .order('payment_date', { ascending: false, nullsFirst: false })
     .order('purchase_date', { ascending: false })
 
@@ -30,7 +30,9 @@ export async function GET(req: Request) {
   }
   if (category) q = q.eq('category', category)
   if (accountId) q = q.eq('account_id', accountId)
-  if (type === 'receita') q = q.gt('amount_brl', 0)
+  if (type === 'receita') {
+    q = q.gt('amount_brl', 0).eq('is_transfer', false).neq('accounts.type', 'credit_card')
+  }
   if (type === 'despesa') q = q.lt('amount_brl', 0).eq('is_transfer', false)
 
   const { data, error } = await q

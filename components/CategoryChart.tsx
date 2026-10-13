@@ -5,19 +5,24 @@ type CategoryTransaction = {
   amount_brl: number
   category?: string | null
   is_transfer?: boolean
+  accounts?: { type?: string | null } | null
 }
 
 export default function CategoryChart({ transactions }: { transactions: CategoryTransaction[] }) {
   const totals: Record<string, number> = {}
   transactions
-    .filter(t => !t.is_transfer && t.amount_brl < 0)
+    .filter(t => !t.is_transfer && (
+      t.amount_brl < 0
+      || (t.amount_brl > 0 && t.accounts?.type === 'credit_card')
+    ))
     .forEach(t => {
       const c = t.category || 'Sem categoria'
-      totals[c] = (totals[c] || 0) + Math.abs(t.amount_brl)
+      totals[c] = (totals[c] || 0) - t.amount_brl
     })
 
   const data = Object.entries(totals)
     .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+    .filter(category => category.value > 0)
     .sort((a, b) => b.value - a.value)
     .slice(0, 10)
 

@@ -22,7 +22,7 @@ type TransactionRow = {
   installment?: string | null
   amount_brl: number
   is_transfer?: boolean
-  accounts?: Pick<TransactionAccount, 'name' | 'color' | 'last_four'>
+  accounts?: Pick<TransactionAccount, 'name' | 'color' | 'last_four' | 'type'>
 }
 
 export default function TransactionsPage() {
@@ -168,9 +168,14 @@ export default function TransactionsPage() {
               </p>
             </div>
             <div className="text-right shrink-0">
-              <p className={`font-semibold ${t.amount_brl < 0 ? 'text-red-600' : 'text-green-600'}`}>
+              <p className={`font-semibold ${
+                t.amount_brl < 0 ? 'text-red-600' : t.accounts?.type === 'credit_card' ? 'text-blue-600' : 'text-green-600'
+              }`}>
                 {t.amount_brl.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
+              {t.amount_brl > 0 && t.accounts?.type === 'credit_card' && (
+                <p className="text-xs text-blue-600">Crédito no cartão</p>
+              )}
               <div className="flex gap-2 justify-end mt-1">
                 <button onClick={() => startEdit(t)} className="text-xs text-blue-500">
                   editar
