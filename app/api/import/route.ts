@@ -144,7 +144,6 @@ export async function POST(req: Request) {
 
     const rowsToRecategorize = matchedRows.filter(({ existing, incoming }) =>
       existing.category !== incoming.category
-      && (existing.category === 'Viagem' || existing.category === 'Transporte')
       && (incoming.category === 'Viagem' || incoming.category === 'Transporte')
     )
     const recategorizationResults = await Promise.all(rowsToRecategorize.map(({ existing, incoming }) =>
