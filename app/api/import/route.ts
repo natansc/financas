@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { resolveCategory } from '@/lib/categorize'
 import { getSupabaseAdmin, checkToken } from '@/lib/supabase-admin'
 
 const normalizeText = (value: string | null | undefined) => (value ?? '').trim().replace(/\s+/g, ' ')
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
       purchase_date: r.purchase_date,
       card_name: r.card_name,
       card_last_four: r.card_last_four,
-      category: r.category,
+      category: resolveCategory(r.category, description),
       description,
       installment: r.installment || 'Única',
       amount_usd: Number(r.amount_usd ?? 0),
@@ -142,9 +143,19 @@ export async function POST(req: Request) {
       reassigned = idsToRelabel.length
     }
 
+    const autoCategories = new Set([
+      'Alimentação',
+      'IPVA',
+      'Pet',
+      'Transporte',
+      'Viagem',
+      'Consorcio',
+      'Consórcio',
+    ])
     const rowsToRecategorize = matchedRows.filter(({ existing, incoming }) =>
       existing.category !== incoming.category
-      && (incoming.category === 'Viagem' || incoming.category === 'Transporte')
+      && autoCategories.has(existing.category ?? '')
+      && autoCategories.has(incoming.category ?? '')
     )
     const recategorizationResults = await Promise.all(rowsToRecategorize.map(({ existing, incoming }) =>
       supabase

@@ -1,16 +1,19 @@
-/**
- * Categorização por palavra-chave.
- * Só roda como FALLBACK — quando o Itaú mandou "Outros" ou nada.
- */
+/** Categorização por palavra-chave, com precedência para regras específicas de estabelecimento. */
 
 type Rule = { category: string; rx: RegExp }
 
+const PET_KEYWORDS = /\b(PET\s?LOVE|PETLOVE|PETZ|COBASI|BICHO\s?CHIC|AGROPET|PET\s?SHOP|AMIGO\s?FIEL)\b/
+const FOOD_DELIVERY_KEYWORDS = /\b99[\s*._-]*FOOD\b/
 const TRAVEL_KEYWORDS = /\b(PRIME(?:[\s._-]*PASSAPOR\w*)?|DECOLAR|BOOKING(?:\.COM|\s+COM)?|AIRBNB|EXPEDIA|HOTEIS?\s?\.?\s?COM|HOTELS?\s?\.?\s?COM|TRIVAGO|HURB|CVC|MAX\s?MILHAS|123\s?MILHAS|AZUL(?:\s?LINHAS)?|AZULVIA|GOL(?:\s?LINHAS)?|LATAM|PASSAREDO|VOEPASS|TAP(?:\s?AIR)?|AVIANCA|COPA\s?AIRLINES|AMERICAN\s?AIRLINES|UNITED\s?AIRLINES|DELTA\s?AIRLINES|AIR\s?FRANCE|LUFTHANSA|TURISMO|POUSADA|HOTEL|HOSTEL|CRUZEIRO|VIAJES|FLOT|SP\s?HOLAFLY)\b/
 const VEHICLE_KEYWORDS = /\b(IPVA|CONSORCIO|SEGUROS?|PROTECAO\s?VEICULAR|LICENCIAMENTO|DPVAT|DETRAN|VEICULOS?|AUTOMOVEIS?|CARROS?|POSTOS?|AUTO\s?POSTOS?|POSTO\s+(DE\s+)?(GASOLINA|COMBUSTIVEL)|COMBUSTIVEL|COMBUSTIVEIS|ABASTECIMENTO|GASOLINA|ETANOL|ALCOOL|DIESEL|GNV|IPIRANGA|PETROBRAS|SHELL|ALE\s+COMBUSTIVEIS|RAIZEN|VIBRA\s+ENERGIA|RODOIL|AUTO\s?PECAS|OFICINA\s+MECANICA|MECANICA\s+AUTOMOTIVA|BORRACHARIA|TROCA\s+DE\s+OLEO|LAVA\s?JATO|AUTO\s?CENTER|ESTACIONAMENTO|PEDAGIO|CONCESSIONARIA|LOCACAO\s?DE\s?VEICULOS)\b/
-const TRANSPORT_KEYWORDS = /\b(UBER[\s*._-]*RIDES?|UBER|99\s?(APP|TAXI|FOOD)?|DL\s?\*?\s?UBER|TAXI|SEM\s?PARAR|ZUL\s?|ECOVIAS|AUTO\s?BAN|EIXO\s?SP|CCR|ARTESP|MOVIDA|LOCALIZA|UNIDAS|RENTALCAR|REDE\s?DITO|REDE\s?DE\s?POSTOS|CRB\s?FPAY|MARAJOCANAPOLIS|CONCEBRA|FLAMBOYANT)\b/
+const TRANSPORT_KEYWORDS = /\b(UBER[\s*._-]*RIDES?|UBER|99[\s*._-]*(APP|TAXI)\b|DL\s?\*?\s?UBER|TAXI|SEM\s?PARAR|ZUL\s?|ECOVIAS|AUTO\s?BAN|EIXO\s?SP|CCR|ARTESP|MOVIDA|LOCALIZA|UNIDAS|RENTALCAR|REDE\s?DITO|REDE\s?DE\s?POSTOS|CRB\s?FPAY|MARAJOCANAPOLIS|CONCEBRA|FLAMBOYANT)\b/
 
 /** Ordem importa: primeira regra que casar vence */
 const RULES: Rule[] = [
+  // Estabelecimentos específicos devem vencer a regra genérica de transporte para "99".
+  { category: 'Pet', rx: PET_KEYWORDS },
+  { category: 'Alimentação', rx: FOOD_DELIVERY_KEYWORDS },
+
   // Despesas e serviços relacionados a veículos sempre entram em Transporte.
   { category: 'Transporte', rx: VEHICLE_KEYWORDS },
 
@@ -90,6 +93,12 @@ export function resolveCategory(
   description: string
 ): string | null {
   const normalizedDescription = normalize(`${description} ${itauCategory ?? ''}`)
+  if (PET_KEYWORDS.test(normalizedDescription)) {
+    return 'Pet'
+  }
+  if (FOOD_DELIVERY_KEYWORDS.test(normalizedDescription)) {
+    return 'Alimentação'
+  }
   if (VEHICLE_KEYWORDS.test(normalizedDescription)) {
     return 'Transporte'
   }
