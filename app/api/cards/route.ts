@@ -41,7 +41,6 @@ export async function GET(req: Request) {
       `and(invoice_month.is.null,payment_date.gte.${sinceIso},payment_date.lt.${untilIso}),` +
       `and(invoice_month.is.null,payment_date.is.null,purchase_date.gte.${sinceIso},purchase_date.lt.${untilIso})`
     )
-    .lt('amount_brl', 0)
     .eq('is_transfer', false)
 
   if (errTx) return NextResponse.json({ error: errTx.message }, { status: 500 })
@@ -60,7 +59,7 @@ export async function GET(req: Request) {
     const monthly = monthKeys.map(m => {
       const total = accTxs
         .filter(t => (t.invoice_month || t.payment_date || t.purchase_date).startsWith(m))
-        .reduce((s, t) => s + Math.abs(t.amount_brl), 0)
+        .reduce((s, t) => s - t.amount_brl, 0)
       return { month: m, total: Number(total.toFixed(2)) }
     })
 
@@ -74,10 +73,11 @@ export async function GET(req: Request) {
       .filter(t => (t.invoice_month || t.payment_date || t.purchase_date).startsWith(selectedMonth))
       .forEach(t => {
         const c = t.category || 'Sem categoria'
-        catTotals[c] = (catTotals[c] || 0) + Math.abs(t.amount_brl)
+        catTotals[c] = (catTotals[c] || 0) - t.amount_brl
       })
     const topCategories = Object.entries(catTotals)
       .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+      .filter(category => category.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 6)
 

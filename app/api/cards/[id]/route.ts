@@ -22,7 +22,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       `and(invoice_month.is.null,payment_date.gte.${start},payment_date.lt.${end}),` +
       `and(invoice_month.is.null,payment_date.is.null,purchase_date.gte.${start},purchase_date.lt.${end})`
     )
-    .lt('amount_brl', 0)
     .order('amount_brl', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -31,12 +30,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   ;(data ?? []).forEach(t => {
     const key = t.description
     if (!byDesc[key]) byDesc[key] = { total: 0, count: 0 }
-    byDesc[key].total += Math.abs(t.amount_brl)
+    byDesc[key].total -= t.amount_brl
     byDesc[key].count += 1
   })
 
   const topStores = Object.entries(byDesc)
     .map(([name, v]) => ({ name, total: Number(v.total.toFixed(2)), count: v.count }))
+    .filter(store => store.total > 0)
     .sort((a, b) => b.total - a.total)
     .slice(0, 10)
 
