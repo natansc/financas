@@ -25,12 +25,6 @@ type TransactionRow = {
   accounts?: Pick<TransactionAccount, 'name' | 'color' | 'last_four'>
 }
 
-function getPreviousMonth(month: string) {
-  const [year, monthNumber] = month.split('-').map(Number)
-  const previous = new Date(Date.UTC(year, monthNumber - 2, 1))
-  return `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, '0')}`
-}
-
 export default function TransactionsPage() {
   const [txs, setTxs] = useState<TransactionRow[]>([])
   const [accounts, setAccounts] = useState<TransactionAccount[]>([])
@@ -43,7 +37,7 @@ export default function TransactionsPage() {
 
   const load = () => {
     const params = new URLSearchParams()
-    if (month) params.set('month', getPreviousMonth(month))
+    if (month) params.set('month', month)
     if (accountId) params.set('account_id', accountId)
     if (category) params.set('category', category)
     if (type) params.set('type', type)
@@ -113,7 +107,7 @@ export default function TransactionsPage() {
 
       <div className="space-y-2 bg-white p-3 rounded-xl shadow-sm">
         <p className="text-xs text-gray-500">
-          O mês selecionado representa a fatura; os lançamentos exibidos são do mês anterior.
+          Para cartões, o mês do filtro corresponde ao mês de vencimento da fatura.
         </p>
         <input
           type="month"

@@ -46,6 +46,18 @@ const parseDate = (s: string) => {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === clean ? clean : ''
 }
 
+const getC6InvoicePaymentDate = (purchaseDate: string) => {
+  const [year, month, day] = purchaseDate.split('-').map(Number)
+  const closingMonth = new Date(Date.UTC(year, month - 1 + (day > 4 ? 1 : 0), 1))
+  const dueMonth = new Date(Date.UTC(
+    closingMonth.getUTCFullYear(),
+    closingMonth.getUTCMonth() + 1,
+    1,
+  ))
+  const dueMonthKey = `${dueMonth.getUTCFullYear()}-${String(dueMonth.getUTCMonth() + 1).padStart(2, '0')}`
+  return { paymentDate: `${dueMonthKey}-08`, invoiceMonth: dueMonthKey }
+}
+
 const parseMoney = (value: string) => {
   if (!value) return 0
   let clean = value
@@ -153,10 +165,11 @@ const parseC6InvoiceCsv = (rows: CsvRow[]): NormalizedRow[] => {
         || amount === 0
       ) return null
 
+      const { paymentDate, invoiceMonth } = getC6InvoicePaymentDate(purchaseDate)
       const row: NormalizedRow = {
         purchase_date: purchaseDate,
-        payment_date: purchaseDate,
-        invoice_month: purchaseDate.slice(0, 7),
+        payment_date: paymentDate,
+        invoice_month: invoiceMonth,
         card_name: getField(r, 'Nome no Cartão', 'Nome', 'Titular') || 'Manual',
         card_last_four: getField(r, 'Final do Cartão', 'Final', 'Cartão') || '',
         category: resolveCategory(categoryValue && categoryValue !== '-' ? categoryValue.trim() : null, description),
