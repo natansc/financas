@@ -143,15 +143,17 @@ export async function POST(req: Request) {
     }
 
     const rowsToRecategorize = matchedRows.filter(({ existing, incoming }) =>
-      existing.category === 'Transporte' && incoming.category === 'Viagem'
+      existing.category !== incoming.category
+      && (existing.category === 'Viagem' || existing.category === 'Transporte')
+      && (incoming.category === 'Viagem' || incoming.category === 'Transporte')
     )
-    const recategorizationResults = await Promise.all(rowsToRecategorize.map(({ existing }) =>
+    const recategorizationResults = await Promise.all(rowsToRecategorize.map(({ existing, incoming }) =>
       supabase
         .from('transactions')
-        .update({ category: 'Viagem' })
+        .update({ category: incoming.category })
         .eq('id', existing.id)
         .eq('source', 'csv')
-        .eq('category', 'Transporte')
+        .eq('category', existing.category)
     ))
     const recategorizationError = recategorizationResults.find(result => result.error)?.error
     if (recategorizationError) {
