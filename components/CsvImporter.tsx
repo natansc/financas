@@ -159,7 +159,7 @@ const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[
         || !description
         || isInvoicePaymentEntry(description)
         || !Number.isFinite(amount)
-        || amount === 0
+        || amount <= 0
       ) return null
 
       const row: NormalizedRow = {
