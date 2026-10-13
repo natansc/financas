@@ -161,7 +161,7 @@ const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[
         || isInvoicePaymentEntry(description)
         || isAnnualFeeEntry(description)
         || !Number.isFinite(amount)
-        || amount <= 0
+        || amount === 0
       ) return null
 
       const row: NormalizedRow = {
@@ -175,7 +175,7 @@ const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[
         installment,
         amount_usd: 0,
         exchange_rate: 0,
-        amount_brl: Number((-Math.abs(amount)).toFixed(2)),
+        amount_brl: Number((-amount).toFixed(2)),
         is_transfer: false,
       }
       return row
