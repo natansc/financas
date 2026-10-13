@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 
 type Props = {
@@ -8,17 +8,19 @@ type Props = {
   kind: 'despesa' | 'receita'
 }
 
+type Category = { id: string; name: string }
+
 export default function CategorySelect({ value, onChange, kind }: Props) {
-  const [cats, setCats] = useState<any[]>([])
+  const [cats, setCats] = useState<Category[]>([])
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const load = () => {
+  const load = useCallback(() => {
     api.get(`/api/categories?kind=${kind}`)
       .then(d => setCats(Array.isArray(d) ? d : []))
-  }
-  useEffect(() => { load() }, [kind])
+  }, [kind])
+  useEffect(() => { load() }, [load])
 
   const createNew = async () => {
     const name = newName.trim()
@@ -45,6 +47,9 @@ export default function CategorySelect({ value, onChange, kind }: Props) {
             className="flex-1 border rounded-lg px-3 py-2 text-base bg-white"
           >
             <option value="">— Selecione —</option>
+            {value && !cats.some(category => category.name === value) && (
+              <option value={value}>{value}</option>
+            )}
             {cats.map(c => (
               <option key={c.id} value={c.name}>{c.name}</option>
             ))}

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import CategorySelect from '@/components/CategorySelect'
 
@@ -11,9 +11,38 @@ type Account = {
   color?: string
 }
 
+type Transaction = {
+  id: string
+  account_id: string
+  purchase_date: string
+  payment_date?: string | null
+  invoice_month?: string | null
+  description: string
+  category?: string | null
+  installment?: string | null
+  amount_brl: number
+  is_transfer?: boolean
+}
+
+type TransactionFormState = {
+  id?: string
+  account_id: string
+  purchase_date: string
+  payment_date: string
+  first_invoice_month: string
+  description: string
+  category: string
+  installment: string
+  is_transfer: boolean
+  amount: string
+  total: string
+  installments: number
+  type: 'despesa' | 'receita'
+}
+
 type Props = {
   accounts: Account[]
-  initial?: any | null
+  initial?: Transaction | null
   onSaved: () => void
   onClose: () => void
 }
@@ -52,9 +81,13 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
     account_id: initial?.account_id || accounts[0]?.id || '',
     purchase_date: initial?.purchase_date || new Date().toISOString().slice(0, 10),
     payment_date: initial?.payment_date || defaultPaymentDate(),
-    first_invoice_month: initial?.invoice_month || new Date().toISOString().slice(0, 7),
+    first_invoice_month: initial?.invoice_month
+      || initial?.payment_date?.slice(0, 7)
+      || new Date().toISOString().slice(0, 7),
     description: initial?.description || '',
     category: initial?.category || '',
+    installment: initial?.installment || 'Única',
+    is_transfer: initial?.is_transfer || false,
     amount:
       initial?.amount_brl !== undefined
         ? Math.abs(initial.amount_brl).toFixed(2).replace('.', ',')
@@ -67,17 +100,13 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         : ('despesa' as 'receita' | 'despesa'),
   })
 
-  const [form, setForm] = useState<any>(buildForm())
+  const [form, setForm] = useState<TransactionFormState>(buildForm())
 
-  useEffect(() => {
-    if (!form.account_id && accounts[0]) {
-      setForm((f: any) => ({ ...f, account_id: accounts[0].id }))
-    }
-  }, [accounts])
-
-  const selectedAccount = accounts.find(a => a.id === form.account_id)
+  const selectedAccountId = form.account_id || accounts[0]?.id || ''
+  const selectedAccount = accounts.find(a => a.id === selectedAccountId)
   const isCreditCard = selectedAccount?.type === 'credit_card'
   const showInstallmentUI = isCreditCard && !isEdit
+  const categoryKind = isCreditCard ? 'despesa' : form.type
 
   const parseValue = (s: string) =>
     parseFloat(String(s).replace(/\./g, '').replace(',', '.'))
@@ -99,7 +128,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.account_id) return alert('Cadastre uma conta primeiro')
+    if (!selectedAccountId) return alert('Cadastre uma conta primeiro')
 
     setSaving(true)
     setFeedback(null)
@@ -112,13 +141,15 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         const amount_brl = form.type === 'despesa' ? -Math.abs(value) : Math.abs(value)
         const res = await api.patch('/api/transactions', {
           id: form.id,
-          account_id: form.account_id,
+          account_id: selectedAccountId,
           purchase_date: form.purchase_date,
           payment_date: finalPaymentDate,
           invoice_month: isCreditCard ? form.first_invoice_month : null,
           description: form.description,
           category: form.category || null,
           amount_brl,
+          installment: form.installment.trim() || 'Única',
+          is_transfer: form.is_transfer,
         })
         if (res?.error) throw new Error(res.error)
         onSaved()
@@ -136,7 +167,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         const payload = values.map((v, i) => {
           const month = addMonths(form.first_invoice_month, i)
           return {
-            account_id: form.account_id,
+            account_id: selectedAccountId,
             purchase_date: form.purchase_date,
             payment_date: `${month}-08`,
             invoice_month: month,
@@ -158,7 +189,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
         if (isNaN(value)) throw new Error('Valor inválido')
         const amount_brl = form.type === 'despesa' ? -Math.abs(value) : Math.abs(value)
         const res = await api.post('/api/transactions', {
-          account_id: form.account_id,
+          account_id: selectedAccountId,
           purchase_date: form.purchase_date,
           payment_date: finalPaymentDate,
           invoice_month: isCreditCard ? form.first_invoice_month : null,
@@ -174,7 +205,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
       }
 
       onSaved()
-      setForm((f: any) => ({
+      setForm(f => ({
         ...f,
         description: '',
         category: '',
@@ -220,7 +251,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
                 : 'text-gray-600'
             }`}
           >
-            {t === 'despesa' ? 'Despesa' : 'Receita'}
+            {t === 'despesa' ? 'Despesa' : isCreditCard ? 'Crédito no cartão' : 'Receita'}
           </button>
         ))}
       </div>
@@ -229,7 +260,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
       <label className="block">
         <span className="text-xs font-medium text-gray-600">Conta</span>
         <select
-          value={form.account_id}
+          value={selectedAccountId}
           onChange={e => setForm({ ...form, account_id: e.target.value })}
           className="w-full border rounded-lg px-3 py-2 text-base bg-white"
           required
@@ -354,8 +385,31 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
       <CategorySelect
         value={form.category}
         onChange={v => setForm({ ...form, category: v })}
-        kind={form.type}
+        kind={categoryKind}
       />
+
+      {isEdit && (
+        <>
+          <label className="block">
+            <span className="text-xs font-medium text-gray-600">Parcela</span>
+            <input
+              type="text"
+              value={form.installment}
+              onChange={e => setForm({ ...form, installment: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-base"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={form.is_transfer}
+              onChange={e => setForm({ ...form, is_transfer: e.target.checked })}
+              className="rounded border-gray-300"
+            />
+            Marcar como transferência (fora das despesas e receitas)
+          </label>
+        </>
+      )}
 
       {/* Vencimento — só pra cartão de crédito, à vista */}
       {isCreditCard && mode === 'single' && (
@@ -376,15 +430,28 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
       )}
 
       {isEdit && isCreditCard && (
-        <label className="block">
-          <span className="text-xs font-medium text-gray-600">Vencimento da fatura</span>
-          <input
-            type="date"
-            value={form.payment_date}
-            onChange={e => setForm({ ...form, payment_date: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-base"
-          />
-        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="text-xs font-medium text-gray-600">Mês da fatura</span>
+            <input
+              type="month"
+              required
+              value={form.first_invoice_month}
+              onChange={e => setForm({ ...form, first_invoice_month: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-base"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-gray-600">Vencimento da fatura</span>
+            <input
+              type="date"
+              required
+              value={form.payment_date}
+              onChange={e => setForm({ ...form, payment_date: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-base"
+            />
+          </label>
+        </div>
       )}
 
       {/* Preview das parcelas */}
