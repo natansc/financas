@@ -106,6 +106,7 @@ const isInvoicePaymentEntry = (value: string) => {
   return text.includes('inclusao de pagamento')
     || (text.includes('pagamento') && text.includes('fatura'))
 }
+const isAnnualFeeEntry = (value: string) => normalizeHeader(value).includes('anuidade')
 
 const matchesDataHeader = (value: string) => {
   const text = normalizeHeader(value)
@@ -158,6 +159,7 @@ const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[
         !purchaseDate
         || !description
         || isInvoicePaymentEntry(description)
+        || isAnnualFeeEntry(description)
         || !Number.isFinite(amount)
         || amount <= 0
       ) return null
