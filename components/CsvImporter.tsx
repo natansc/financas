@@ -131,7 +131,7 @@ const parseC6BankCsv = (rows: CsvRow[]): NormalizedRow[] => {
     .filter((row): row is NormalizedRow => row !== null)
 }
 
-const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[] => {
+const parseC6InvoiceCsv = (rows: CsvRow[]): NormalizedRow[] => {
   return rows
     .map((r) => {
       const purchaseDate = parseDate(getField(r, 'Data de Compra', 'Data'))
@@ -144,8 +144,8 @@ const parseC6InvoiceCsv = (rows: CsvRow[], invoiceMonth: string): NormalizedRow[
 
       const row: NormalizedRow = {
         purchase_date: purchaseDate,
-        payment_date: `${invoiceMonth}-08`,
-        invoice_month: invoiceMonth,
+        payment_date: purchaseDate,
+        invoice_month: purchaseDate.slice(0, 7),
         card_name: getField(r, 'Nome no Cartão', 'Nome', 'Titular') || 'Manual',
         card_last_four: getField(r, 'Final do Cartão', 'Final', 'Cartão') || '',
         category: resolveCategory(categoryValue && categoryValue !== '-' ? categoryValue.trim() : null, description),
@@ -166,7 +166,6 @@ type CsvImporterProps = { mode: 'invoice' | 'statement' }
 export default function CsvImporter({ mode }: CsvImporterProps) {
   const [accounts, setAccounts] = useState<ImportAccount[]>([])
   const [accountId, setAccountId] = useState('')
-  const [invoiceMonth, setInvoiceMonth] = useState(new Date().toISOString().slice(0, 7))
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ inserted: number; duplicates: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -233,7 +232,7 @@ export default function CsvImporter({ mode }: CsvImporterProps) {
             }
 
             const rows = mode === 'invoice'
-              ? parseC6InvoiceCsv(parsedRows, invoiceMonth)
+              ? parseC6InvoiceCsv(parsedRows)
               : parseC6BankCsv(parsedRows)
 
             if (!rows.length) {
@@ -246,13 +245,11 @@ export default function CsvImporter({ mode }: CsvImporterProps) {
               ...row,
               card_name: mode === 'statement' ? account.name : row.card_name,
               card_last_four: mode === 'statement' ? '' : row.card_last_four,
-              invoice_month: mode === 'invoice' ? invoiceMonth : null,
               payment_date: row.payment_date || row.purchase_date,
             }))
 
             const res = await api.post('/api/import', {
               account_id: accountId,
-              invoice_month: mode === 'invoice' ? invoiceMonth : null,
               rows: payload,
             })
 
@@ -300,23 +297,12 @@ export default function CsvImporter({ mode }: CsvImporterProps) {
           </select>
         </label>
 
-        {mode === 'invoice' && (
-          <label className="block">
-            <span className="block text-sm font-medium text-gray-700 mb-1">Mês da fatura</span>
-            <input
-              type="month"
-              value={invoiceMonth}
-              onChange={e => setInvoiceMonth(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-base"
-            />
-          </label>
-        )}
       </div>
 
       <label className="block">
         <span className="block text-sm text-gray-600 mb-2">
           {mode === 'invoice'
-            ? 'Importe somente o CSV da fatura do cartão C6. Todos os lançamentos serão registrados como despesas no cartão.'
+            ? 'Importe somente o CSV da fatura do cartão C6. A data da compra de cada lançamento será lida do arquivo; todos serão registrados como despesas no cartão.'
             : 'Importe somente o CSV de movimentações da conta C6. Entradas ficam positivas e saídas, como Pix e pagamento de fatura, ficam negativas.'}
         </span>
         <input
