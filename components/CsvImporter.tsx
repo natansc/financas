@@ -92,6 +92,11 @@ const isCardBillPayment = (value: string) => {
     || text.includes('fatura de cartao')
     || text.includes('pagamento de fatura')
 }
+const isInvoicePaymentEntry = (value: string) => {
+  const text = normalizeHeader(value).replace(/\s+/g, ' ')
+  return text.includes('inclusao de pagamento')
+    || (text.includes('pagamento') && text.includes('fatura'))
+}
 
 const matchesDataHeader = (value: string) => {
   const text = normalizeHeader(value)
@@ -140,7 +145,13 @@ const parseC6InvoiceCsv = (rows: CsvRow[]): NormalizedRow[] => {
       const installment = getField(r, 'Parcela', 'Installment') || 'Única'
       const amount = parseMoney(getField(r, 'Valor (em R$)'))
 
-      if (!purchaseDate || !description || !Number.isFinite(amount) || amount === 0) return null
+      if (
+        !purchaseDate
+        || !description
+        || isInvoicePaymentEntry(description)
+        || !Number.isFinite(amount)
+        || amount === 0
+      ) return null
 
       const row: NormalizedRow = {
         purchase_date: purchaseDate,
