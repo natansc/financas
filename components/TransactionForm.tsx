@@ -251,7 +251,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
                 : 'text-gray-600'
             }`}
           >
-            {t === 'despesa' ? 'Despesa' : isCreditCard ? 'Crédito no cartão' : 'Receita'}
+            {t === 'despesa' ? 'Despesa' : 'Receita'}
           </button>
         ))}
       </div>
