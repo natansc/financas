@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isC6CardRefund } from '@/lib/transaction-classification'
 import { getSupabaseAdmin, checkToken } from '@/lib/supabase-admin'
 
 export async function GET(req: Request) {
@@ -31,13 +32,13 @@ export async function GET(req: Request) {
   if (category) q = q.eq('category', category)
   if (accountId) q = q.eq('account_id', accountId)
   if (type === 'receita') {
-    q = q.gt('amount_brl', 0).eq('is_transfer', false).neq('accounts.type', 'credit_card')
+    q = q.gt('amount_brl', 0).eq('is_transfer', false)
   }
   if (type === 'despesa') q = q.lt('amount_brl', 0).eq('is_transfer', false)
 
   const { data, error } = await q
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+  return NextResponse.json(type === 'receita' ? data.filter(t => !isC6CardRefund(t)) : data)
 }
 
 export async function POST(req: Request) {

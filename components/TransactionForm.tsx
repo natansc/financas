@@ -106,7 +106,7 @@ export default function TransactionForm({ accounts, initial, onSaved, onClose }:
   const selectedAccount = accounts.find(a => a.id === selectedAccountId)
   const isCreditCard = selectedAccount?.type === 'credit_card'
   const showInstallmentUI = isCreditCard && !isEdit
-  const categoryKind = isCreditCard ? 'despesa' : form.type
+  const categoryKind = form.type
 
   const parseValue = (s: string) =>
     parseFloat(String(s).replace(/\./g, '').replace(',', '.'))

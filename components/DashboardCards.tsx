@@ -1,7 +1,10 @@
 'use client'
 
+import { isC6CardRefund } from '@/lib/transaction-classification'
+
 type DashboardTransaction = {
   amount_brl: number
+  source?: string | null
   is_transfer?: boolean
   accounts?: { type?: string | null } | null
 }
@@ -9,10 +12,10 @@ type DashboardTransaction = {
 export default function DashboardCards({ transactions }: { transactions: DashboardTransaction[] }) {
   const activeTransactions = transactions.filter(t => !t.is_transfer)
   const receitas = activeTransactions
-    .filter(t => t.amount_brl > 0 && t.accounts?.type !== 'credit_card')
+    .filter(t => t.amount_brl > 0 && !isC6CardRefund(t))
     .reduce((s, t) => s + t.amount_brl, 0)
   const cardCredits = activeTransactions
-    .filter(t => t.amount_brl > 0 && t.accounts?.type === 'credit_card')
+    .filter(isC6CardRefund)
     .reduce((s, t) => s + t.amount_brl, 0)
   const expenses = activeTransactions
     .filter(t => t.amount_brl < 0)

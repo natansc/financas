@@ -1,10 +1,12 @@
 'use client'
 import { useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { isC6CardRefund } from '@/lib/transaction-classification'
 
 type CategoryTransaction = {
   id: string
   amount_brl: number
+  source?: string | null
   category?: string | null
   is_transfer?: boolean
   purchase_date: string
@@ -17,7 +19,7 @@ export default function CategoryChart({ transactions }: { transactions: Category
   const totals: Record<string, number> = {}
   const includedTransactions = transactions.filter(t => !t.is_transfer && (
     t.amount_brl < 0
-    || (t.amount_brl > 0 && t.accounts?.type === 'credit_card')
+    || isC6CardRefund(t)
   ))
   includedTransactions.forEach(t => {
     const c = t.category || 'Sem categoria'
@@ -111,7 +113,7 @@ export default function CategoryChart({ transactions }: { transactions: Category
                   <p className={transaction.amount_brl > 0 ? 'font-medium text-blue-600' : 'font-medium text-red-600'}>
                     {transaction.amount_brl.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </p>
-                  {transaction.amount_brl > 0 && (
+                  {isC6CardRefund(transaction) && (
                     <p className="text-xs text-blue-600">Crédito no cartão</p>
                   )}
                 </div>
